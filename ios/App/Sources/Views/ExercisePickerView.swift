@@ -46,19 +46,30 @@ struct ExercisePickerView: View {
 
                 Section {
                     ForEach(filteredExercises) { exercise in
-                        Button {
-                            select(exercise)
-                        } label: {
-                            HStack {
-                                Text(exercise.name)
-                                    .foregroundStyle(.primary)
-                                Spacer()
-                                Text(displayName(for: exercise.primaryMuscle))
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
+                        HStack {
+                            Button {
+                                select(exercise)
+                            } label: {
+                                HStack {
+                                    Text(exercise.name)
+                                        .foregroundStyle(.primary)
+                                    Spacer()
+                                    Text(displayName(for: exercise.primaryMuscle))
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
                             }
+                            .buttonStyle(.plain)
+
+                            // Task 5.3: history/detail entry point,
+                            // separate from the row's select action.
+                            NavigationLink {
+                                ExerciseHistoryView(exercise: exercise)
+                            } label: {
+                                Image(systemName: "info.circle")
+                            }
+                            .buttonStyle(.plain)
                         }
-                        .buttonStyle(.plain)
                     }
                 }
             }
