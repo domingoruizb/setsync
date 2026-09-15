@@ -30,6 +30,6 @@ quadriceps, hamstrings, glutes, calves, adductors.
 - **Renderizado:** Componente SwiftUI basado en formas vectoriales (Shape o Paths SVG) representando vistas frontal y dorsal del cuerpo humano.
 - **Mapeo de IDs:** Cada región vectorial tiene asignado un identificador único de `MuscleGroup`.
 - **Cálculo de Color:**
-  - Se calcula el `Score` acumulado de la sesión o del periodo seleccionado sumando 1.0 por serie si es músculo primario y 0.4 si es secundario.
+  - Se calcula el `Score` acumulado sumando 1.0 por serie si es músculo primario y 0.4 si es secundario, sobre los `WorkoutSet` cuyo `timestamp` cae en el día natural de hoy (00:00 local hasta el instante actual) — periodo concreto acordado en Task 5.2 de `specs/implementation-plan.md`, ya que esta tarea no incluye un selector de periodo; coherente con la sección "Today" del `DashboardView`.
   - El valor resultante se proyecta directamente a los 5 niveles cromáticos definidos en `specs/01-system-spec.md`.
 - **Interactividad:** Al pulsar un grupo muscular coloreado, se despliega una tarjeta flotante indicando el nombre del músculo, las series acumuladas y los ejercicios que lo activaron.

@@ -15,12 +15,23 @@ struct DashboardView: View {
     @Query(sort: \WorkoutSession.startDate, order: .reverse)
     private var sessions: [WorkoutSession]
 
+    @Query(sort: \WorkoutSet.timestamp)
+    private var allSets: [WorkoutSet]
+
     private var todayMetrics: DailySummaryMetrics? {
         dailyMetrics.first { Calendar.current.isDateInToday($0.date) }
     }
 
     private var activeSession: WorkoutSession? {
         sessions.first { $0.status == .inProgress }
+    }
+
+    // specs/modules/03-ai-and-muscle-map.md §2 (Task 5.2 decision): scored
+    // over today's WorkoutSets, matching the "Today" section above rather
+    // than a single session or an all-time total.
+    private var todaysMuscleScores: [MuscleGroup: Double] {
+        let todaysSets = allSets.filter { Calendar.current.isDateInToday($0.timestamp) }
+        return MuscleHeatMapView.muscleScores(from: todaysSets)
     }
 
     var body: some View {
@@ -32,6 +43,10 @@ struct DashboardView: View {
 
                 Section("Active Session") {
                     activeSessionContent
+                }
+
+                Section("Muscle Activation") {
+                    MuscleHeatMapView(scores: todaysMuscleScores)
                 }
 
                 Section("Garmin Watch") {
