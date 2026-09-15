@@ -5,11 +5,13 @@ import SwiftUI
 /// SwiftData model instance (not a separate `@Query`), so `session.sets`
 /// keeps updating in place as `GarminSyncService` inserts new sets.
 ///
-/// The exercise name and a reserved comment mark exactly where Task 4.2's
-/// searchable dropdown and Task 4.3's "Copy Down" button will slot in —
-/// neither is implemented here.
+/// Tapping a row's exercise name opens `ExercisePickerView` (Task 4.2). A
+/// reserved comment marks exactly where Task 4.3's "Copy Down" button will
+/// slot in — not implemented here.
 struct ActiveWorkoutView: View {
     let session: WorkoutSession
+
+    @State private var setPendingExerciseSelection: WorkoutSet?
 
     private var orderedSets: [WorkoutSet] {
         session.sets.sorted { $0.timestamp < $1.timestamp }
@@ -27,6 +29,9 @@ struct ActiveWorkoutView: View {
             }
         }
         .navigationTitle("Active Workout")
+        .sheet(item: $setPendingExerciseSelection) { set in
+            ExercisePickerView(workoutSet: set)
+        }
     }
 
     private func setRow(ordinal: Int, set: WorkoutSet) -> some View {
@@ -49,11 +54,15 @@ struct ActiveWorkoutView: View {
             .font(.caption)
             .foregroundStyle(.secondary)
 
-            // Task 4.2: replaced by a searchable exercise dropdown (Picker
-            // or Menu) with a "Create new exercise" fallback.
-            Text(set.exercise?.name ?? "Select exercise…")
-                .font(.subheadline)
-                .foregroundStyle(set.exercise == nil ? .secondary : .primary)
+            // Task 4.2: searchable exercise dropdown with inline creation.
+            Button {
+                setPendingExerciseSelection = set
+            } label: {
+                Text(set.exercise?.name ?? "Select exercise…")
+                    .font(.subheadline)
+                    .foregroundStyle(set.exercise == nil ? .secondary : .primary)
+            }
+            .buttonStyle(.plain)
 
             // Task 4.3: "Copy Down" button goes here — visible only on the
             // last set with exercise != nil when a later set has
