@@ -75,22 +75,24 @@ struct DashboardView: View {
         .frame(maxWidth: .infinity)
     }
 
-    // specs/modules/02-ios-core-and-sync.md §1 "estado de sesión" +
-    // live WorkoutSets arriving from the watch.
+    // specs/modules/02-ios-core-and-sync.md §1 "estado de sesión": a
+    // compact banner: tapping it opens the full live set table
+    // (ActiveWorkoutView, Task 4.1).
     @ViewBuilder
     private var activeSessionContent: some View {
         if let session = activeSession {
-            if session.sets.isEmpty {
-                Text("Session in progress — waiting for sets from your watch")
-                    .foregroundStyle(.secondary)
-            } else {
-                ForEach(session.sets.sorted(by: { $0.timestamp < $1.timestamp })) { set in
-                    HStack {
-                        Text(set.exercise?.name ?? "Unlabeled exercise")
-                        Spacer()
-                        Text("\(set.reps) reps @ \(set.weightKg, specifier: "%.1f") kg")
+            NavigationLink {
+                ActiveWorkoutView(session: session)
+            } label: {
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Session in progress")
+                            .font(.headline)
+                        Text("\(session.sets.count) set(s) so far")
+                            .font(.caption)
                             .foregroundStyle(.secondary)
                     }
+                    Spacer()
                 }
             }
         } else {
