@@ -2,8 +2,8 @@
 
 ## Phase 1: Foundations, Scaffolding & Models
 - [x] **Task 1.1:** Scaffold empty directory tree (`/garmin`, `/ios`, `.github/workflows`).
-- [ ] **Task 1.2:** Implement SwiftData models in iOS (`ios/Sources/Models/`): `Exercise`, `WorkoutSet`, `WorkoutSession`, `DailySummaryMetrics` according to `specs/01-system-spec.md`.
-- [ ] **Task 1.3:** Implement `MuscleGroup` enum and color-mapping function (levels 0-5) in iOS.
+- [x] **Task 1.2:** Implement SwiftData models in iOS (`ios/App/Sources/Models/`): `Exercise`, `WorkoutSet`, `WorkoutSession`, `DailySummaryMetrics` according to `specs/01-system-spec.md`. Path corrected from `ios/Sources/Models/` to match the `ios/App/Sources` project structure declared in `specs/modules/02-ios-core-and-sync.md` §5. `Exercise.primaryMuscle`/`secondaryMuscles` depend on a minimal `MuscleGroup` stub enum (cases only, no color logic) introduced in this task to allow compilation; Task 1.3 completes it with the color-mapping function.
+- [ ] **Task 1.3:** Complete `MuscleGroup` enum (started as a stub in Task 1.2) with all remaining taxonomy cases and implement the color-mapping function (levels 0-5) in iOS.
 - [ ] **Task 1.4:** Create declarative `ios/project.yml` (XcodeGen spec) and configure `.github/workflows/build-ios.yml` pipeline for remote headless builds.
 
 ---
