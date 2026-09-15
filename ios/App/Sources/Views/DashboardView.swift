@@ -145,9 +145,20 @@ private struct HealthKitServiceKey: EnvironmentKey {
     static let defaultValue: HealthKitService? = nil
 }
 
+// MARK: - MuscleClassifierService environment injection
+
+private struct MuscleClassifierServiceKey: EnvironmentKey {
+    static let defaultValue: MuscleClassifierService? = nil
+}
+
 extension EnvironmentValues {
     var healthKitService: HealthKitService? {
         get { self[HealthKitServiceKey.self] }
         set { self[HealthKitServiceKey.self] = newValue }
+    }
+
+    var muscleClassifierService: MuscleClassifierService? {
+        get { self[MuscleClassifierServiceKey.self] }
+        set { self[MuscleClassifierServiceKey.self] = newValue }
     }
 }

@@ -8,6 +8,7 @@ import SwiftUI
 struct ExercisePickerView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.muscleClassifierService) private var muscleClassifierService
 
     let workoutSet: WorkoutSet
 
@@ -103,6 +104,25 @@ struct ExercisePickerView: View {
         )
         modelContext.insert(exercise)
         select(exercise)
+        classifyMuscleGroups(for: exercise)
+    }
+
+    // specs/modules/03-ai-and-muscle-map.md §1: fired only on Exercise
+    // creation (never for selecting an existing one), asynchronously, in
+    // the background — the sheet has already dismissed by the time this
+    // resolves. If the service has no key, is offline, or fails to parse
+    // a valid response, `classify` returns nil and the manually-picked
+    // `newExerciseMuscle` this exercise was created with is left as-is.
+    private func classifyMuscleGroups(for exercise: Exercise) {
+        guard let muscleClassifierService else { return }
+        Task {
+            guard let result = await muscleClassifierService.classify(exerciseName: exercise.name) else {
+                return
+            }
+            exercise.primaryMuscle = result.primaryMuscleGroup
+            exercise.secondaryMuscles = result.secondaryMuscleGroups
+            try? modelContext.save()
+        }
     }
 
     private func displayName(for muscle: MuscleGroup) -> String {
