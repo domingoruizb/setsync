@@ -7,17 +7,7 @@ import Toybox.WatchUi;
 // taps, onto SetSyncView's FSM-driving entry points.
 class SetSyncDelegate extends WatchUi.BehaviorDelegate {
 
-    // BACK must be held this long to count as "BACK (Hold)" (§3) and end
-    // the session; a shorter release is treated as a short press. Not
-    // specified exactly by the spec; raised from 1000ms to 1500ms (a more
-    // standard hold-to-confirm duration) so an accidental firm tap can't
-    // end the session/discard the in-progress rest.
-    private const BACK_HOLD_THRESHOLD_MS = 1500;
-
     private var _view as SetSyncView;
-    // Null until a KEY_ESC down is actually observed, so onKeyReleased can
-    // defensively detect (and ignore) a release with no matching press.
-    private var _backPressedAtMs as Number?;
 
     function initialize(view as SetSyncView) {
         BehaviorDelegate.initialize();
@@ -41,6 +31,8 @@ class SetSyncDelegate extends WatchUi.BehaviorDelegate {
         } else if (key == WatchUi.KEY_DOWN) {
             _view.onDownPressed();
             return true;
+        } else if (key == WatchUi.KEY_ESC) {
+            return handleBackPressed();
         }
         return false;
     }
@@ -64,46 +56,37 @@ class SetSyncDelegate extends WatchUi.BehaviorDelegate {
         return true;
     }
 
-    // BACK is timed manually (down -> up) to distinguish a short press
-    // (EDIT_SET focus toggle) from BACK (Hold) (RESTING -> IDLE, §3).
-    function onKeyPressed(keyEvent as WatchUi.KeyEvent) as Boolean {
-        if (keyEvent.getKey() == WatchUi.KEY_ESC) {
-            _backPressedAtMs = System.getTimer();
-            return true;
+    // Field-tested on a real fr165 (not just the simulator): holding BACK
+    // in RESTING never reached the app at all — the firmware intercepts a
+    // genuine BACK hold before it is ever delivered, so there was no down/
+    // up-timing threshold that could have made the old hold-detection
+    // approach work. BACK's action is now driven purely by state, from a
+    // single combined press+release event (both the physical key here and
+    // the touch swipe-right gesture via onBack() below), no timing at all:
+    //  - RESTING: ends the session immediately (was "BACK (Hold)" in §3;
+    //    a plain press is the only mechanism that is actually delivered).
+    //  - EDIT_SET: cycles the reps/weight focus (unchanged from before).
+    //  - IDLE: exits the app back to the watch face via System.exit() —
+    //    the default BehaviorDelegate.onBack() would otherwise call
+    //    WatchUi.popView(), which crashes this single-view device app.
+    //  - ACTIVE_SET: no defined BACK behavior (§3); swallowed as a no-op.
+    private function handleBackPressed() as Boolean {
+        var state = _view.getStateMachine().getState();
+        if (state == WorkoutState.RESTING) {
+            _view.onEndSessionRequested();
+        } else if (state == WorkoutState.EDIT_SET) {
+            _view.onBackShortPressed();
+        } else if (state == WorkoutState.IDLE) {
+            System.exit();
         }
-        return false;
-    }
-
-    function onKeyReleased(keyEvent as WatchUi.KeyEvent) as Boolean {
-        if (keyEvent.getKey() == WatchUi.KEY_ESC) {
-            var pressedAtMs = _backPressedAtMs;
-            _backPressedAtMs = null;
-            // Defensive: a release with no recorded press (e.g. the press
-            // was consumed elsewhere, or event ordering on some device)
-            // must not compute a bogus multi-hour "held" duration — treat
-            // it as a short press instead.
-            if (pressedAtMs == null) {
-                _view.onBackShortPressed();
-                return true;
-            }
-            var heldMs = System.getTimer() - pressedAtMs;
-            if (heldMs >= BACK_HOLD_THRESHOLD_MS) {
-                _view.onBackHoldPressed();
-            } else {
-                _view.onBackShortPressed();
-            }
-            return true;
-        }
-        return false;
-    }
-
-    // The default BehaviorDelegate.onBack() calls WatchUi.popView(), which
-    // crashes a single-screen device app (nothing on the view stack to pop
-    // to — this was the simulator's blue-triangle reset). BACK is already
-    // fully handled above via onKeyPressed/onKeyReleased timing, so this
-    // just consumes the behavior-level dispatch without popping anything.
-    function onBack() as Boolean {
         return true;
+    }
+
+    // Touch equivalent of the physical BACK button (fr165 recognizes a
+    // swipe-right gesture as "back"): routed through the same state-driven
+    // handler so both input sources behave identically.
+    function onBack() as Boolean {
+        return handleBackPressed();
     }
 
     // Touch equivalent of the BACK short press: a tap advances the same

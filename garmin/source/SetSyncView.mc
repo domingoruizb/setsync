@@ -85,7 +85,13 @@ class SetSyncView extends WatchUi.View {
         WatchUi.requestUpdate();
     }
 
-    function onBackHoldPressed() as Void {
+    // Renamed from onBackHoldPressed(): field testing on a real fr165
+    // found the physical BACK-hold gesture never reaches the app (firmware
+    // intercepts it), so SetSyncDelegate now triggers this from a plain
+    // BACK press/swipe-right in RESTING instead of a timed hold. The
+    // underlying FSM transition (RESTING -> IDLE) is unchanged; only the
+    // name here was updated so it no longer implies a hold gesture.
+    function onEndSessionRequested() as Void {
         var previousState = _stateMachine.getState();
         _stateMachine.onBackHoldPressed();
         handleTransition(previousState, _stateMachine.getState());
