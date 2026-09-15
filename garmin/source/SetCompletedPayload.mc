@@ -12,9 +12,16 @@ module SetCompletedPayload {
     // between the two so "timestamp" is a standard Unix timestamp.
     const GARMIN_TO_UNIX_EPOCH_OFFSET_SEC = 631065600;
 
+    // Shared by SET_COMPLETED (below) and SESSION_EVENT
+    // (CommunicationsService.sendSessionEvent) so both use the exact same
+    // Garmin-epoch-to-Unix-epoch conversion.
+    function unixTimestampSec() as Number {
+        return Time.now().value() + GARMIN_TO_UNIX_EPOCH_OFFSET_SEC;
+    }
+
     function build(reps as Number, weightKg as Float, durationSec as Number, restSec as Number) as Dictionary {
-        var unixTimestampSec = Time.now().value() + GARMIN_TO_UNIX_EPOCH_OFFSET_SEC;
-        var setId = (unixTimestampSec * 1000).toString();
+        var timestampSec = unixTimestampSec();
+        var setId = (timestampSec * 1000).toString();
 
         return {
             "msgType" => "SET_COMPLETED",
@@ -24,7 +31,7 @@ module SetCompletedPayload {
                 "weightKg" => weightKg,
                 "durationSec" => durationSec,
                 "restSec" => restSec,
-                "timestamp" => unixTimestampSec
+                "timestamp" => timestampSec
             }
         };
     }

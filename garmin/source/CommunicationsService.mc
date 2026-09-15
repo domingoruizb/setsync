@@ -33,6 +33,24 @@ class CommunicationsService extends Communications.ConnectionListener {
         attemptTransmit();
     }
 
+    // specs/01-system-spec.md §2.2: SESSION_EVENT (Garmin -> iOS), sent on
+    // the FSM's IDLE <-> RESTING session boundary transitions. Fire-and-
+    // forget (no FIFO queue/retry): §4's offline queue is specified for
+    // SET_COMPLETED specifically, and there is no ACK defined for
+    // SESSION_EVENT to track against. Uses its own ConnectionListener
+    // rather than `self`, so it can't stomp on `_transmitInFlight` if a
+    // SET_COMPLETED happens to be in flight at the same moment.
+    function sendSessionEvent(action as String) as Void {
+        var message = {
+            "msgType" => "SESSION_EVENT",
+            "payload" => {
+                "action" => action,
+                "timestamp" => SetCompletedPayload.unixTimestampSec()
+            }
+        };
+        Communications.transmit(message, null, new SessionEventListener());
+    }
+
     // §4: only send when the queue is non-empty and the link is up; never
     // more than one transmit in flight at a time.
     private function attemptTransmit() as Void {
@@ -76,5 +94,20 @@ class CommunicationsService extends Communications.ConnectionListener {
         if (setId != null) {
             _queue.removeById(setId);
         }
+    }
+}
+
+// Dedicated no-op listener for sendSessionEvent()'s fire-and-forget
+// transmit, kept separate from CommunicationsService's own
+// _transmitInFlight bookkeeping (see sendSessionEvent's comment).
+class SessionEventListener extends Communications.ConnectionListener {
+    function initialize() {
+        Communications.ConnectionListener.initialize();
+    }
+
+    function onComplete() as Void {
+    }
+
+    function onError() as Void {
     }
 }

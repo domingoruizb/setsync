@@ -152,6 +152,11 @@ class SetSyncView extends WatchUi.View {
         if (from == WorkoutState.IDLE && to == WorkoutState.RESTING) {
             _lastSetReps = -1;
             _restStartMs = System.getTimer();
+            // specs/01-system-spec.md §2.2: session start (§3 "Inicia
+            // sesión (SESSION_EVENT: START)"). Was left unimplemented in
+            // Task 2.5; closed here so a WorkoutSession actually exists on
+            // the iOS side before any SET_COMPLETED arrives for it.
+            _communicationsService.sendSessionEvent("START");
         } else if (from == WorkoutState.RESTING && to == WorkoutState.ACTIVE_SET) {
             _lastRestDurationSec = (System.getTimer() - _restStartMs) / 1000;
             _repDetector.reset();
@@ -185,6 +190,9 @@ class SetSyncView extends WatchUi.View {
             // and keep retrying in the background regardless of which
             // screen is shown, so nothing pending is lost by returning to
             // IDLE.
+            // specs/01-system-spec.md §2.2: session end (§3 "SESSION_EVENT:
+            // STOP"), closing the same gap as the START event above.
+            _communicationsService.sendSessionEvent("STOP");
         }
     }
 
