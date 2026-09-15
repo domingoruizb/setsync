@@ -1,0 +1,24 @@
+# OS
+.DS_Store
+Thumbs.db
+
+# Garmin Connect IQ
+bin/
+*.prg
+*.iq
+*.der
+developer_key.*
+
+# Xcode / Swift / iOS
+build/
+DerivedData/
+*.xcodeproj
+*.xcworkspace
+*.ipa
+Payload/
+.build/
+Package.resolved
+
+# Secrets
+.env
+*.local
