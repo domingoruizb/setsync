@@ -1,3 +1,4 @@
+import Combine
 import ConnectIQ
 import Foundation
 import SwiftData
@@ -15,7 +16,7 @@ import SwiftData
 /// "App"/"DeviceEvents"-style redundant words differently than a literal
 /// reading of the selector would suggest, and there is no local Xcode/
 /// Swift toolchain in this environment to compile-check it directly.
-final class GarminSyncService: NSObject, IQUIOverrideDelegate, IQDeviceEventDelegate, IQAppMessageDelegate {
+final class GarminSyncService: NSObject, ObservableObject, IQUIOverrideDelegate, IQDeviceEventDelegate, IQAppMessageDelegate {
 
     // Must match garmin/manifest.xml's <iq:application id="..."> exactly —
     // this identifies our Monkey C app to the ConnectIQ Mobile SDK. Not
@@ -24,7 +25,8 @@ final class GarminSyncService: NSObject, IQUIOverrideDelegate, IQDeviceEventDele
     private static let garminAppUUID = UUID(uuidString: "145fa933-0711-4e6f-9263-d5d10098afff")!
 
     private let modelContext: ModelContext
-    private(set) var pairedDevice: IQDevice?
+    @Published private(set) var pairedDevice: IQDevice?
+    @Published private(set) var deviceStatus: IQDeviceStatus?
     private var garminApp: IQApp?
 
     init(modelContext: ModelContext) {
@@ -74,8 +76,12 @@ final class GarminSyncService: NSObject, IQUIOverrideDelegate, IQDeviceEventDele
     // MARK: - IQDeviceEventDelegate
 
     func deviceStatusChanged(_ device: IQDevice!, status: IQDeviceStatus) {
-        // Connection status is informational only for this task; the
-        // actual sync work happens in receivedMessage(_:from:).
+        // The SDK's delegate callbacks aren't guaranteed to fire on the
+        // main thread/actor; @Published mutations (which drive SwiftUI)
+        // must happen there.
+        DispatchQueue.main.async { [weak self] in
+            self?.deviceStatus = status
+        }
     }
 
     // MARK: - IQAppMessageDelegate
@@ -114,7 +120,13 @@ final class GarminSyncService: NSObject, IQUIOverrideDelegate, IQDeviceEventDele
 
         // specs/01-system-spec.md §4: "Toda serie recibida entra con
         // exercise = nil" — assigned later in ActiveWorkoutView (Task 4.1).
-        if let activeSession = fetchActiveSession() {
+        // SYNC_ACK is sent immediately, independent of this persistence
+        // (matches §4's "respuesta inmediata"); the SwiftData write is
+        // dispatched to the main thread/actor since this delegate callback
+        // isn't guaranteed to fire there and modelContext (container.mainContext,
+        // wired in SetSyncApp) is meant to be used from main.
+        DispatchQueue.main.async { [weak self] in
+            guard let self, let activeSession = self.fetchActiveSession() else { return }
             let workoutSet = WorkoutSet(
                 exercise: nil,
                 reps: reps,
@@ -124,9 +136,9 @@ final class GarminSyncService: NSObject, IQUIOverrideDelegate, IQDeviceEventDele
                 detectedAutomatically: true,
                 timestamp: Date(timeIntervalSince1970: TimeInterval(timestamp))
             )
-            modelContext.insert(workoutSet)
+            self.modelContext.insert(workoutSet)
             activeSession.sets.append(workoutSet)
-            try? modelContext.save()
+            try? self.modelContext.save()
         }
 
         sendSyncAck(setId: setId, to: app)
@@ -138,15 +150,18 @@ final class GarminSyncService: NSObject, IQUIOverrideDelegate, IQDeviceEventDele
             return
         }
 
-        if action == "START" {
-            let session = WorkoutSession(status: .inProgress)
-            modelContext.insert(session)
-            try? modelContext.save()
-        } else if action == "STOP" {
-            if let activeSession = fetchActiveSession() {
-                activeSession.endDate = Date()
-                activeSession.status = .completed
-                try? modelContext.save()
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            if action == "START" {
+                let session = WorkoutSession(status: .inProgress)
+                self.modelContext.insert(session)
+                try? self.modelContext.save()
+            } else if action == "STOP" {
+                if let activeSession = self.fetchActiveSession() {
+                    activeSession.endDate = Date()
+                    activeSession.status = .completed
+                    try? self.modelContext.save()
+                }
             }
         }
     }
