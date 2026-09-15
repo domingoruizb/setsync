@@ -9,7 +9,7 @@
 ---
 
 ## Phase 2: Garmin Connect IQ App
-- [ ] **Task 2.1:** Create baseline Connect IQ Device App project targeting Forerunner 165.
+- [x] **Task 2.1:** Create baseline Connect IQ Device App project targeting Forerunner 165. **Naming decision:** product name is `SetSync` (consistent with the Task 1.4 iOS/repo naming), used as the manifest `app-name` string and as the Monkey C class prefix (`SetSyncApp`, `SetSyncView`, `SetSyncDelegate`). Scaffolding only: an empty `IDLE`-equivalent starter screen, no FSM/state logic (Task 2.2), no sensor code (Task 2.3), no button bindings (Task 2.4), no `Communications` transmission logic (Task 2.5). The `Communications` manifest permission is declared upfront since it is a documented core module (`CLAUDE.md` Key Modules) the app will require.
 - [ ] **Task 2.2:** Implement Finite State Machine (`IDLE`, `ACTIVE_SET`, `EDIT_SET`, `RESTING`).
 - [ ] **Task 2.3:** Implement accelerometer sampling (25 Hz) and SMA peak-detection filter.
 - [ ] **Task 2.4:** Implement manual rep and weight adjustment screens with physical button bindings.
