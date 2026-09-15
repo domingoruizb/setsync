@@ -42,7 +42,7 @@
   - Opción directa: *"Crear nuevo ejercicio"* si la búsqueda no arroja resultados.
 - **Botón de Replicación ("Copiar Hacia Abajo"):**
   - Condición de visibilidad: Solo presente en la última serie con `exercise != nil` si existe al menos una serie posterior con `exercise == nil`.
-  - Acción: Asigna `currentSet.exercise` a `nextSet.exercise`.
+  - Acción: Propaga `currentSet.exercise` a todos los sets huérfanos (`exercise == nil`) subsecuentes de la sesión activa, deteniéndose en el primer set que ya tenga `exercise != nil` o al final de la lista (ampliado desde "asigna a nextSet"; decisión acordada en Task 4.3 de `specs/implementation-plan.md`).
   - Invariante: No muta ni repeticiones (`reps`) ni carga (`weightKg`).
 
 ---
