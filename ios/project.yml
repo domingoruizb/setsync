@@ -3,16 +3,44 @@ options:
   bundleIdPrefix: com.domingoruizb
   deploymentTarget:
     iOS: "17.0"
+packages:
+  ConnectIQ:
+    url: https://github.com/garmin/connectiq-companion-app-sdk-ios
+    exactVersion: 1.8.0
 targets:
   SetSync:
     type: application
     platform: iOS
     sources:
       - App/Sources
+    dependencies:
+      - package: ConnectIQ
+    info:
+      properties:
+        CFBundleDisplayName: SetSync
+        # Garmin Connect Mobile communication (specs/modules/02-ios-core-and-sync.md §5).
+        NSBluetoothAlwaysUsageDescription: "SetSync uses Bluetooth to receive completed sets from your Garmin watch."
+        NSBluetoothPeripheralUsageDescription: "SetSync uses Bluetooth to receive completed sets from your Garmin watch."
+        UIBackgroundModes:
+          - bluetooth-central
+        # Required by Garmin's ConnectIQ Mobile SDK so the app can check for
+        # and hand off to Garmin Connect Mobile (gcm-ciq), and so GCM can
+        # call back into this app via its own registered URL scheme.
+        LSApplicationQueriesSchemes:
+          - gcm-ciq
+        CFBundleURLTypes:
+          - CFBundleURLName: com.domingoruizb.setsync
+            CFBundleURLSchemes:
+              - setsync-ciq
+        # HealthKit, read-only (specs/modules/02-ios-core-and-sync.md §3).
+        NSHealthShareUsageDescription: "SetSync reads your daily steps and calories to show them on your dashboard."
+        NSHealthUpdateUsageDescription: "SetSync does not write health data; HealthKit requires this description regardless."
+    entitlements:
+      properties:
+        com.apple.developer.healthkit: true
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.domingoruizb.setsync
-        GENERATE_INFOPLIST_FILE: YES
         CODE_SIGN_IDENTITY: ""
         CODE_SIGNING_REQUIRED: NO
         CODE_SIGNING_ALLOWED: NO
