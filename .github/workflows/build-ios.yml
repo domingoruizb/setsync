@@ -25,8 +25,8 @@ jobs:
       - name: Build Unsigned App
         working-directory: ios
         run: |
-          xcodebuild -project SunFit.xcodeproj \
-            -scheme SunFit \
+          xcodebuild -project SetSync.xcodeproj \
+            -scheme SetSync \
             -configuration Release \
             -sdk iphoneos \
             CODE_SIGN_IDENTITY="" \
@@ -38,12 +38,12 @@ jobs:
         working-directory: ios
         run: |
           mkdir -p Payload
-          cp -r build/Release-iphoneos/SunFit.app Payload/
-          zip -r SunFit.ipa Payload
+          cp -r build/Release-iphoneos/SetSync.app Payload/
+          zip -r SetSync.ipa Payload
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: SunFit-unsigned-ipa
-          path: ios/SunFit.ipa
+          name: SetSync-unsigned-ipa
+          path: ios/SetSync.ipa
           retention-days: 7

@@ -1,0 +1,23 @@
+name: SetSync
+options:
+  bundleIdPrefix: com.domingoruiz
+targets:
+  SetSync:
+    type: application
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources:
+      - App/Sources
+    info:
+      properties:
+        UILaunchScreen: {}
+        CFBundleDisplayName: SetSync
+        CFBundleShortVersionString: "1.0"
+        CFBundleVersion: "1"
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.domingoruiz.setsync
+        CODE_SIGN_IDENTITY: ""
+        CODE_SIGNING_REQUIRED: NO
+        CODE_SIGNING_ALLOWED: NO
+        TARGETED_DEVICE_FAMILY: "1"
