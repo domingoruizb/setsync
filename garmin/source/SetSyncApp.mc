@@ -9,6 +9,7 @@ class SetSyncApp extends Application.AppBase {
     }
 
     function getInitialView() as [Views] or [Views, InputDelegates] {
-        return [new SetSyncView(), new SetSyncDelegate()];
+        var view = new SetSyncView();
+        return [view, new SetSyncDelegate(view)];
     }
 }
