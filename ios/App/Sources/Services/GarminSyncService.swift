@@ -20,7 +20,7 @@ final class GarminSyncService: NSObject, IQUIOverrideDelegate, IQDeviceEventDele
     // Must match garmin/manifest.xml's <iq:application id="..."> exactly —
     // this identifies our Monkey C app to the ConnectIQ Mobile SDK. Not
     // published to the Connect IQ Store, so the same UUID is reused as the
-    // (otherwise meaningless, for a personal sideloaded app) storeUuid.
+    // (otherwise meaningless, for a personal sideloaded app) store id.
     private static let garminAppUUID = UUID(uuidString: "145fa933-0711-4e6f-9263-d5d10098afff")!
 
     private let modelContext: ModelContext
@@ -41,7 +41,7 @@ final class GarminSyncService: NSObject, IQUIOverrideDelegate, IQDeviceEventDele
     /// specs/modules/02-ios-core-and-sync.md §2 step 1: launches Garmin
     /// Connect Mobile's device-selection UI.
     func selectDevice() {
-        ConnectIQ.sharedInstance().showConnectIQDeviceSelection()
+        ConnectIQ.sharedInstance().showDeviceSelection()
     }
 
     /// Handles the URL callback Garmin Connect Mobile sends back to the
@@ -55,7 +55,7 @@ final class GarminSyncService: NSObject, IQUIOverrideDelegate, IQDeviceEventDele
         pairedDevice = device
         let app = IQApp(
             uuid: GarminSyncService.garminAppUUID,
-            storeUuid: GarminSyncService.garminAppUUID,
+            store: GarminSyncService.garminAppUUID,
             device: device
         )
         garminApp = app
