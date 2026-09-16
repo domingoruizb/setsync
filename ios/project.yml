@@ -39,30 +39,23 @@ targets:
           - CFBundleURLName: com.domingoruizb.setsync
             CFBundleURLSchemes:
               - setsync-ciq
-        # HealthKit: reads daily steps/calories (specs/modules/02-ios-core-and-sync.md §3)
-        # and, since the post-launch Apple Health export feature, writes
-        # completed workouts as HKWorkout entries so other apps (e.g.
-        # Strava, via its own free Health sync) can pick them up.
+        # HealthKit, read-only (specs/modules/02-ios-core-and-sync.md §3).
+        # A write feature (exporting sessions as HKWorkout entries) was
+        # built and then discarded: a provisioning profile generated from
+        # a free/personal-team Apple ID (this app's actual sideloading
+        # path, via Sideloadly) never gets the com.apple.developer.healthkit
+        # entitlement granted by Apple at all, blocking HealthKit access —
+        # read or write — at the OS level. Strava export now goes through
+        # TCXExportService instead, which needs no entitlement.
         NSHealthShareUsageDescription: "SetSync lee tus pasos y calorías diarias para mostrarlos en tu resumen de Hoy."
-        NSHealthUpdateUsageDescription: "SetSync guarda tus entrenamientos de fuerza en Salud para que otras apps, como Strava, puedan sincronizarlos."
+        NSHealthUpdateUsageDescription: "SetSync no escribe datos de salud; HealthKit exige esta descripción de todos modos."
     entitlements:
       path: App/Sources/SetSync.entitlements
       properties:
         com.apple.developer.healthkit: true
-        # Empty array: SetSync only reads/writes standard quantity/workout
-        # samples, not Clinical Health Records — Xcode's own HealthKit
-        # capability toggle adds this key (present but empty) even when
-        # Clinical Health Records is left unchecked, so this matches what
-        # a normally-configured Xcode target would generate.
-        com.apple.developer.healthkit.access: []
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.domingoruizb.setsync
         CODE_SIGN_IDENTITY: ""
         CODE_SIGNING_REQUIRED: NO
         CODE_SIGNING_ALLOWED: NO
-        # Explicit, even though XcodeGen's `entitlements:.path` above
-        # already wires this up automatically — made explicit so there is
-        # no ambiguity that the entitlements file is actually associated
-        # with the target's build settings.
-        CODE_SIGN_ENTITLEMENTS: App/Sources/SetSync.entitlements

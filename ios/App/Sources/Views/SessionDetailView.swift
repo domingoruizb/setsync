@@ -8,13 +8,10 @@ import SwiftUI
 /// `ExerciseDetailView` (Task 6.4)).
 struct SessionDetailView: View {
     @Environment(\.modelContext) private var modelContext
-    @Environment(\.healthKitService) private var healthKitService
 
     let session: WorkoutSession
 
     @State private var setPendingEdit: WorkoutSet?
-    @State private var isSavingToHealth = false
-    @State private var healthSaveErrorMessage: String?
 
     private var orderedSets: [WorkoutSet] {
         session.sets.sorted { $0.timestamp < $1.timestamp }
@@ -75,7 +72,7 @@ struct SessionDetailView: View {
             }
 
             Section {
-                healthSyncRow
+                stravaExportRow
             }
 
             ForEach(groupedByExercise) { group in
@@ -117,67 +114,41 @@ struct SessionDetailView: View {
         .sheet(item: $setPendingEdit) { set in
             SetEditView(set: set)
         }
-        .alert(
-            "No se pudo guardar en Apple Health",
-            isPresented: Binding(
-                get: { healthSaveErrorMessage != nil },
-                set: { isPresented in
-                    if !isPresented { healthSaveErrorMessage = nil }
-                }
-            )
-        ) {
-            Button("OK", role: .cancel) {}
-        } message: {
-            Text(healthSaveErrorMessage ?? "")
-        }
     }
 
-    // Three states: already synced (green checkmark, no action), session
-    // still in progress (nothing to export yet — HealthKitService itself
-    // requires an endDate), or a button to save now. Manual entry point
-    // alongside the automatic triggers in GarminSyncService/ActiveWorkoutView
-    // — e.g. if the session was edited after those already ran, or if the
-    // automatic save silently failed (permissions, offline) and the user
-    // wants to retry from here.
+    // Replaces a discarded Apple Health export (blocked by Apple not
+    // granting the com.apple.developer.healthkit entitlement to a
+    // free/personal-team-signed app): a `.tcx` file needs no entitlement,
+    // no API key, and Strava's own upload flow accepts it natively.
+    // `tcxExportURL` regenerates the file on every access — a small,
+    // deterministic text file, cheap enough not to bother caching in
+    // `@State`. Gated on `endDate` for the same reason the discarded
+    // Health export was: an in-progress session has no real duration yet.
+    private var tcxExportURL: URL? {
+        try? TCXExportService.exportFile(for: session)
+    }
+
     @ViewBuilder
-    private var healthSyncRow: some View {
-        if session.isSyncedToHealth {
-            Label("Sincronizado con Salud", systemImage: "checkmark.circle.fill")
-                .foregroundStyle(.green)
-        } else if session.endDate == nil {
-            Label("Termina el entrenamiento para guardarlo en Salud", systemImage: "heart.text.square")
+    private var stravaExportRow: some View {
+        if session.endDate == nil {
+            Label("Termina el entrenamiento para exportarlo", systemImage: "square.and.arrow.up")
                 .foregroundStyle(.secondary)
-        } else {
-            Button {
-                saveToHealth()
-            } label: {
-                HStack {
-                    Label("Guardar en Apple Health", systemImage: "heart.text.square")
-                    if isSavingToHealth {
-                        Spacer()
-                        ProgressView()
-                    }
+        } else if let tcxExportURL {
+            VStack(alignment: .leading, spacing: 6) {
+                ShareLink(
+                    item: tcxExportURL,
+                    preview: SharePreview(TCXExportService.fileName(for: session))
+                ) {
+                    Label("Exportar para Strava (.tcx)", systemImage: "square.and.arrow.up")
                 }
-            }
-            .disabled(isSavingToHealth)
-        }
-    }
 
-    private func saveToHealth() {
-        guard let healthKitService else {
-            healthSaveErrorMessage = "Apple Health no está disponible en este dispositivo."
-            return
-        }
-        isSavingToHealth = true
-        healthKitService.saveWorkout(session: session) { result in
-            isSavingToHealth = false
-            if case .failure(let error) = result {
-                // The exact HealthKit-reported reason (missing
-                // authorization, invalid sample, etc.), not a generic
-                // message — HealthKitService.SaveWorkoutError already
-                // logs the same detail to the console via `print`.
-                healthSaveErrorMessage = error.localizedDescription
+                Text("Puedes subir este archivo directamente a strava.com/upload/select desde Safari, o compartirlo con la app Strava desde el menú de compartir.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
+        } else {
+            Label("No se pudo generar el archivo de exportación", systemImage: "exclamationmark.triangle")
+                .foregroundStyle(.secondary)
         }
     }
 
