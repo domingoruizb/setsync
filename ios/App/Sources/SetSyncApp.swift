@@ -26,6 +26,10 @@ struct SetSyncApp: App {
         _garminSyncService = StateObject(wrappedValue: GarminSyncService(modelContext: context))
         healthKitService = HealthKitService(modelContext: context)
         muscleClassifierService = MuscleClassifierService()
+
+        // specs/modules/04-history-and-navigation.md §2: one-time pre-seed
+        // of the exercise catalog, no-op once it's non-empty.
+        ExerciseLibrarySeeder.seedIfNeeded(context: context)
     }
 
     var body: some Scene {

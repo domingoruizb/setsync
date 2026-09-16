@@ -54,7 +54,12 @@ struct ExercisePickerView: View {
                                     Text(exercise.name)
                                         .foregroundStyle(.primary)
                                     Spacer()
-                                    Text(displayName(for: exercise.primaryMuscle))
+                                    // Task 6.1 minimal adaptation: shows
+                                    // only the first primary muscle now
+                                    // that Exercise.primaryMuscles is a
+                                    // list — Task 6.2 redesigns this
+                                    // creation/selection UI properly.
+                                    Text(exercise.primaryMuscles.first.map { displayName(for: $0) } ?? "—")
                                         .font(.caption)
                                         .foregroundStyle(.secondary)
                                 }
@@ -108,10 +113,16 @@ struct ExercisePickerView: View {
     }
 
     // specs/01-system-spec.md §1.1: Exercise.name is stored lowercase.
+    // Task 6.1: wraps the single quick-picked muscle in a list to match
+    // the new `primaryMuscles` field — this whole creation flow (category,
+    // multi-muscle chips, AI classification) is properly rebuilt in
+    // Task 6.2; this is the minimal change needed to compile against the
+    // new Exercise schema.
     private func createAndAssign() {
         let exercise = Exercise(
             name: trimmedSearchText.lowercased(),
-            primaryMuscle: newExerciseMuscle
+            primaryMuscles: [newExerciseMuscle],
+            isCustom: true
         )
         modelContext.insert(exercise)
         select(exercise)
@@ -130,7 +141,10 @@ struct ExercisePickerView: View {
             guard let result = await muscleClassifierService.classify(exerciseName: exercise.name) else {
                 return
             }
-            exercise.primaryMuscle = result.primaryMuscleGroup
+            // Task 6.1: wraps the still-singular MuscleClassifierService
+            // result in a list; Task 6.2 replaces this service (and its
+            // result shape) with GeminiExerciseClassifier's own array output.
+            exercise.primaryMuscles = [result.primaryMuscleGroup]
             exercise.secondaryMuscles = result.secondaryMuscleGroups
             try? modelContext.save()
         }

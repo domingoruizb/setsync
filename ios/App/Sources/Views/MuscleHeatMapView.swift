@@ -81,15 +81,19 @@ struct MuscleHeatMapView: View {
         muscle.rawValue.replacingOccurrences(of: "_", with: " ").capitalized
     }
 
-    // specs/01-system-spec.md §3.2: Score = 1.0 per set for the primary
+    // specs/01-system-spec.md §3.2: Score = 1.0 per set for each primary
     // muscle, 0.4 for each secondary muscle. Sets without an assigned
     // exercise (specs/01-system-spec.md §4: "entra con exercise = nil")
-    // contribute nothing until labeled.
+    // contribute nothing until labeled. Task 6.1: primaryMuscles is now a
+    // list (was a single MuscleGroup), so every primary muscle scores,
+    // not just one.
     static func muscleScores(from sets: [WorkoutSet]) -> [MuscleGroup: Double] {
         var scores: [MuscleGroup: Double] = [:]
         for set in sets {
             guard let exercise = set.exercise else { continue }
-            scores[exercise.primaryMuscle, default: 0] += 1.0
+            for primary in exercise.primaryMuscles {
+                scores[primary, default: 0] += 1.0
+            }
             for secondary in exercise.secondaryMuscles {
                 scores[secondary, default: 0] += 0.4
             }
