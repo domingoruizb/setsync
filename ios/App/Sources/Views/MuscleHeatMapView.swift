@@ -1,9 +1,10 @@
 import SwiftUI
 
 /// specs/modules/03-ai-and-muscle-map.md §2: reactive muscle heat map for
-/// today's activation. A pure/stateless component — the caller (`DashboardView`)
-/// computes `scores` via `MuscleHeatMapView.muscleScores(from:)` and passes
-/// them in, so this view has no data-fetching of its own.
+/// today's activation. A pure/stateless component — the caller (`TodayView`,
+/// renamed from `DashboardView` in Task 6.3) computes `scores` via
+/// `MuscleHeatMapView.muscleScores(from:)` and passes them in, so this view
+/// has no data-fetching of its own.
 ///
 /// Each muscle group renders as a modular vector shape (`RoundedRectangle`)
 /// rather than a hand-drawn anatomical body silhouette: there is no local

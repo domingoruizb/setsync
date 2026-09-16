@@ -1,12 +1,12 @@
-import ConnectIQ
 import SwiftData
 import SwiftUI
 
-/// specs/modules/02-ios-core-and-sync.md §1: root screen — daily summary
-/// (steps/calories), the active session's live set list, and Garmin
-/// pairing status/action.
-struct DashboardView: View {
-    @EnvironmentObject private var garminSyncService: GarminSyncService
+/// specs/modules/02-ios-core-and-sync.md §1, restructured in Task 6.3
+/// (specs/modules/04-history-and-navigation.md §1): "Today" tab — daily
+/// HealthKit summary, the active session's banner, and today's muscle
+/// activation. Renamed from `DashboardView`; Garmin pairing/status moved
+/// out to `SettingsView` (Tab 4).
+struct TodayView: View {
     @Environment(\.healthKitService) private var healthKitService
 
     @Query(sort: \DailySummaryMetrics.date, order: .reverse)
@@ -47,10 +47,6 @@ struct DashboardView: View {
 
                 Section("Muscle Activation") {
                     MuscleHeatMapView(scores: todaysMuscleScores)
-                }
-
-                Section("Garmin Watch") {
-                    garminStatusContent
                 }
             }
             .navigationTitle("SetSync")
@@ -116,25 +112,6 @@ struct DashboardView: View {
         }
     }
 
-    // specs/modules/02-ios-core-and-sync.md §2 step 1 (pairing entry point).
-    @ViewBuilder
-    private var garminStatusContent: some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(garminSyncService.pairedDevice?.friendlyName ?? "No device paired")
-                if let status = garminSyncService.deviceStatus {
-                    Text(String(describing: status))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
-            Spacer()
-            Button("Pair") {
-                garminSyncService.selectDevice()
-            }
-        }
-    }
-
     private func requestHealthDataAndSync() {
         healthKitService?.requestAuthorization { _ in
             healthKitService?.syncTodaySnapshot()
@@ -151,29 +128,5 @@ struct DashboardView: View {
                 continuation.resume()
             }
         }
-    }
-}
-
-// MARK: - HealthKitService environment injection
-
-private struct HealthKitServiceKey: EnvironmentKey {
-    static let defaultValue: HealthKitService? = nil
-}
-
-// MARK: - GeminiExerciseClassifier environment injection
-
-private struct GeminiExerciseClassifierKey: EnvironmentKey {
-    static let defaultValue: GeminiExerciseClassifier? = nil
-}
-
-extension EnvironmentValues {
-    var healthKitService: HealthKitService? {
-        get { self[HealthKitServiceKey.self] }
-        set { self[HealthKitServiceKey.self] = newValue }
-    }
-
-    var geminiExerciseClassifier: GeminiExerciseClassifier? {
-        get { self[GeminiExerciseClassifierKey.self] }
-        set { self[GeminiExerciseClassifierKey.self] = newValue }
     }
 }

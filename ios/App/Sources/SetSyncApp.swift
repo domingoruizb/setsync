@@ -20,7 +20,7 @@ struct SetSyncApp: App {
         modelContainer = container
 
         // Both services share the container's main context so writes from
-        // either one are visible to @Query in DashboardView without a
+        // either one are visible to @Query in the tab views without a
         // separate cross-context sync step.
         let context = container.mainContext
         _garminSyncService = StateObject(wrappedValue: GarminSyncService(modelContext: context))
@@ -34,7 +34,7 @@ struct SetSyncApp: App {
 
     var body: some Scene {
         WindowGroup {
-            DashboardView()
+            RootTabView()
                 .environmentObject(garminSyncService)
                 .environment(\.healthKitService, healthKitService)
                 .environment(\.geminiExerciseClassifier, geminiExerciseClassifier)
