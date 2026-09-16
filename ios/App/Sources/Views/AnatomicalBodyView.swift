@@ -63,16 +63,16 @@ struct AnatomicalBodyView: View {
         if spec.mirrored {
             let dx = spec.xOffsetFraction * size.width
             regionShape(spec.kind)
-                .fill(color)
+                .foregroundStyle(color)
                 .frame(width: regionSize.width, height: regionSize.height)
                 .position(x: size.width / 2 - dx, y: y)
             regionShape(spec.kind)
-                .fill(color)
+                .foregroundStyle(color)
                 .frame(width: regionSize.width, height: regionSize.height)
                 .position(x: size.width / 2 + dx, y: y)
         } else {
             regionShape(spec.kind)
-                .fill(color)
+                .foregroundStyle(color)
                 .frame(width: regionSize.width, height: regionSize.height)
                 .position(x: size.width / 2, y: y)
         }
