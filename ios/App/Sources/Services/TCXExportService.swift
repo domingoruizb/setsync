@@ -129,9 +129,10 @@ enum TCXExportService {
                 order.append(exercise.id)
                 totalsByExerciseId[exercise.id] = ExerciseTotals(name: exercise.name.capitalized)
             }
+            let previousMaxWeightKg = totalsByExerciseId[exercise.id]?.maxWeightKg ?? 0
             totalsByExerciseId[exercise.id]?.setCount += 1
             totalsByExerciseId[exercise.id]?.totalReps += set.reps
-            totalsByExerciseId[exercise.id]?.maxWeightKg = max(totalsByExerciseId[exercise.id]?.maxWeightKg ?? 0, set.weightKg)
+            totalsByExerciseId[exercise.id]?.maxWeightKg = max(previousMaxWeightKg, set.weightKg)
             totalsByExerciseId[exercise.id]?.volumeKg += Double(set.reps) * set.weightKg
         }
 
