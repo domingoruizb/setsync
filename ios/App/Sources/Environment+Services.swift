@@ -1,25 +1,17 @@
 import SwiftUI
 
-/// Custom environment keys for the plain (non-`ObservableObject`) services
-/// injected once in `SetSyncApp` — `HealthKitService`/`GeminiExerciseClassifier`
-/// don't need `@EnvironmentObject`'s change-publishing, just DI. Extracted
-/// out of `DashboardView`/`TodayView` in Task 6.3 now that more than one
-/// tab's views depend on them.
-
-private struct HealthKitServiceKey: EnvironmentKey {
-    static let defaultValue: HealthKitService? = nil
-}
+/// Custom environment key for `GeminiExerciseClassifier`, the one plain
+/// (non-`ObservableObject`) service injected once in `SetSyncApp` — it
+/// doesn't need `@EnvironmentObject`'s change-publishing, just DI.
+/// `HealthKitService` used to have a matching key here too; removed along
+/// with the service itself when `TodayView`'s weekly-dashboard redesign
+/// dropped the daily steps/calories summary that was its only consumer.
 
 private struct GeminiExerciseClassifierKey: EnvironmentKey {
     static let defaultValue: GeminiExerciseClassifier? = nil
 }
 
 extension EnvironmentValues {
-    var healthKitService: HealthKitService? {
-        get { self[HealthKitServiceKey.self] }
-        set { self[HealthKitServiceKey.self] = newValue }
-    }
-
     var geminiExerciseClassifier: GeminiExerciseClassifier? {
         get { self[GeminiExerciseClassifierKey.self] }
         set { self[GeminiExerciseClassifierKey.self] = newValue }

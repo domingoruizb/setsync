@@ -5,26 +5,21 @@ import SwiftUI
 struct SetSyncApp: App {
     private let modelContainer: ModelContainer
     @StateObject private var garminSyncService: GarminSyncService
-    private let healthKitService: HealthKitService
     private let geminiExerciseClassifier: GeminiExerciseClassifier
 
     init() {
         let container: ModelContainer
         do {
             container = try ModelContainer(
-                for: WorkoutSession.self, WorkoutSet.self, Exercise.self, DailySummaryMetrics.self
+                for: WorkoutSession.self, WorkoutSet.self, Exercise.self
             )
         } catch {
             fatalError("Failed to create SwiftData ModelContainer: \(error)")
         }
         modelContainer = container
 
-        // Both services share the container's main context so writes from
-        // either one are visible to @Query in the tab views without a
-        // separate cross-context sync step.
         let context = container.mainContext
         _garminSyncService = StateObject(wrappedValue: GarminSyncService(modelContext: context))
-        healthKitService = HealthKitService(modelContext: context)
         geminiExerciseClassifier = GeminiExerciseClassifier()
 
         // specs/modules/04-history-and-navigation.md §2: one-time pre-seed
@@ -36,7 +31,6 @@ struct SetSyncApp: App {
         WindowGroup {
             RootTabView()
                 .environmentObject(garminSyncService)
-                .environment(\.healthKitService, healthKitService)
                 .environment(\.geminiExerciseClassifier, geminiExerciseClassifier)
                 .onOpenURL { url in
                     // specs/modules/02-ios-core-and-sync.md §2 step 1: Garmin

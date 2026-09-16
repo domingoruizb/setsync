@@ -26,7 +26,18 @@ struct SessionsListView: View {
                     List {
                         ForEach(sessions) { session in
                             NavigationLink {
-                                SessionDetailView(session: session)
+                                // Same reasoning as TodayView's day list:
+                                // an in-progress session needs
+                                // ActiveWorkoutView specifically (the only
+                                // place with the manual "Finalizar
+                                // Entrenamiento" fallback and live
+                                // exercise-assignment flow), not the
+                                // review-only SessionDetailView.
+                                if session.status == .inProgress {
+                                    ActiveWorkoutView(session: session)
+                                } else {
+                                    SessionDetailView(session: session)
+                                }
                             } label: {
                                 sessionRow(session)
                             }

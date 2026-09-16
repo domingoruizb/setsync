@@ -39,20 +39,15 @@ targets:
           - CFBundleURLName: com.domingoruizb.setsync
             CFBundleURLSchemes:
               - setsync-ciq
-        # HealthKit, read-only (specs/modules/02-ios-core-and-sync.md §3).
-        # A write feature (exporting sessions as HKWorkout entries) was
-        # built and then discarded: a provisioning profile generated from
-        # a free/personal-team Apple ID (this app's actual sideloading
-        # path, via Sideloadly) never gets the com.apple.developer.healthkit
-        # entitlement granted by Apple at all, blocking HealthKit access —
-        # read or write — at the OS level. Strava export now goes through
-        # TCXExportService instead, which needs no entitlement.
-        NSHealthShareUsageDescription: "SetSync lee tus pasos y calorías diarias para mostrarlos en tu resumen de Hoy."
-        NSHealthUpdateUsageDescription: "SetSync no escribe datos de salud; HealthKit exige esta descripción de todos modos."
-    entitlements:
-      path: App/Sources/SetSync.entitlements
-      properties:
-        com.apple.developer.healthkit: true
+    # HealthKit (read-only steps/calories, and a later discarded write
+    # feature) was removed entirely along with TodayView's redesign into a
+    # weekly strength dashboard — a provisioning profile generated from a
+    # free/personal-team Apple ID (this app's actual sideloading path, via
+    # Sideloadly) never gets the com.apple.developer.healthkit entitlement
+    # granted by Apple at all, so it never reliably worked on real
+    # hardware anyway. No entitlements file is needed for anything else
+    # this app does (Bluetooth/ConnectIQ need only Info.plist usage
+    # strings, no capability entitlement).
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.domingoruizb.setsync
