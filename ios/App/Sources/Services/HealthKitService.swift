@@ -4,16 +4,20 @@ import SwiftData
 
 /// specs/modules/02-ios-core-and-sync.md §3: read-only HealthKit snapshot
 /// (steps, active/basal energy) for "today," persisted into
-/// DailySummaryMetrics. Meant to be queried on demand (app open /
-/// DashboardView, per §3 "Frecuencia") — not wired into any View yet, since
-/// DashboardView is Task 3.4.
+/// DailySummaryMetrics, queried on demand (app open / TodayView).
+///
+/// Post-launch addition: also writes completed workouts to Apple Health
+/// (`saveWorkout(session:)`) so a free HealthKit-reading app — Strava's own
+/// Health sync, specifically, now that its direct upload API requires a
+/// paid subscription — can pick them up with no third-party integration
+/// of SetSync's own, matching this project's zero-cost stance.
 ///
 /// Defensive by design: every entry point checks
 /// `HKHealthStore.isHealthDataAvailable()` first, every HealthKit call uses
 /// `try?`/optional-binding instead of propagating errors, and a failed or
 /// unauthorized individual statistic silently contributes 0 rather than
-/// blocking the other two or crashing — this is a best-effort dashboard
-/// feature, not a critical path.
+/// blocking the other two or crashing — this is a best-effort feature, not
+/// a critical path, for both reading and writing.
 final class HealthKitService {
 
     private let healthStore = HKHealthStore()
@@ -33,9 +37,16 @@ final class HealthKitService {
         self.modelContext = modelContext
     }
 
-    /// Requests read-only authorization for the three quantity types.
-    /// Never throws or crashes: on a device/simulator without HealthKit,
-    /// or if the user denies access, `completion(false)` is called instead.
+    /// Requests read-only authorization for the three quantity types plus
+    /// write authorization for `HKWorkoutType.workoutType()` (needed by
+    /// `saveWorkout(session:)` below). Never throws or crashes: on a
+    /// device/simulator without HealthKit, or if the user denies access,
+    /// `completion(false)` is called instead. `success` here only reflects
+    /// whether the authorization sheet was presented/resolved, not which
+    /// individual permissions were granted — HealthKit deliberately never
+    /// reports share/write grant-vs-deny to the requesting app, so the
+    /// real signal for whether the write actually worked is `saveWorkout`'s
+    /// own `healthStore.save` completion, not this one.
     func requestAuthorization(completion: @escaping (Bool) -> Void) {
         guard HKHealthStore.isHealthDataAvailable() else {
             completion(false)
@@ -43,11 +54,108 @@ final class HealthKitService {
         }
 
         let readTypes: Set<HKObjectType> = [stepCountType, activeEnergyType, basalEnergyType]
-        healthStore.requestAuthorization(toShare: [], read: readTypes) { success, _ in
+        let shareTypes: Set<HKSampleType> = [HKObjectType.workoutType()]
+        healthStore.requestAuthorization(toShare: shareTypes, read: readTypes) { success, _ in
             DispatchQueue.main.async {
                 completion(success)
             }
         }
+    }
+
+    /// Writes a completed `WorkoutSession` to Apple Health as an
+    /// `HKWorkout` (`.traditionalStrengthTraining`), so any app that reads
+    /// from HealthKit — Strava's own free Health sync included, now that
+    /// its direct API requires a paid subscription — can pick it up
+    /// without SetSync needing its own paid/third-party integration.
+    /// Guards against duplicates via `session.isSyncedToHealth` (set only
+    /// after `healthStore.save` actually succeeds) and against saving an
+    /// unfinished session (`endDate == nil`). Safe to call from either the
+    /// automatic finish-workout trigger or the manual button in
+    /// `SessionDetailView` — calling it twice on an already-synced session
+    /// is a same-cost no-op, not a second HKWorkout.
+    func saveWorkout(session: WorkoutSession, completion: ((Bool) -> Void)? = nil) {
+        guard HKHealthStore.isHealthDataAvailable() else {
+            completion?(false)
+            return
+        }
+        guard !session.isSyncedToHealth, let endDate = session.endDate else {
+            completion?(false)
+            return
+        }
+
+        let metadata: [String: Any] = [
+            HKMetadataKeyWorkoutBrandName: "SetSync",
+            HKMetadataKeyIndoorWorkout: true,
+            // Not a standard HealthKit metadata key — Apple has no
+            // official "workout notes" field, and there's no guarantee
+            // any given reading app (including Strava) surfaces an
+            // arbitrary metadata string as its own activity description.
+            // Included on a best-effort basis regardless, per this task's
+            // explicit request, since it costs nothing to attach.
+            "SetSyncWorkoutSummary": workoutSummary(for: session)
+        ]
+
+        let workout = HKWorkout(
+            activityType: .traditionalStrengthTraining,
+            start: session.startDate,
+            end: endDate,
+            duration: endDate.timeIntervalSince(session.startDate),
+            totalEnergyBurned: nil,
+            totalDistance: nil,
+            metadata: metadata
+        )
+
+        healthStore.save(workout) { [weak self] success, _ in
+            DispatchQueue.main.async {
+                if success {
+                    session.isSyncedToHealth = true
+                    try? self?.modelContext.save()
+                }
+                completion?(success)
+            }
+        }
+    }
+
+    // "Exercise: N series, N reps, N kg" per exercise (in the order first
+    // performed), plus a total-volume line — a plain-text summary of
+    // exactly what this task asked for (ejercicios, series, repeticiones,
+    // volumen total). Sets with no assigned exercise are skipped (nothing
+    // meaningful to name), but still count toward the total volume below.
+    private func workoutSummary(for session: WorkoutSession) -> String {
+        let orderedSets = session.sets.sorted { $0.timestamp < $1.timestamp }
+        guard !orderedSets.isEmpty else {
+            return "Entrenamiento de fuerza registrado con SetSync."
+        }
+
+        struct ExerciseTotals {
+            let name: String
+            var setCount = 0
+            var totalReps = 0
+            var volumeKg = 0.0
+        }
+
+        var order: [UUID] = []
+        var totalsByExerciseId: [UUID: ExerciseTotals] = [:]
+        var totalVolumeKg = 0.0
+
+        for set in orderedSets {
+            totalVolumeKg += Double(set.reps) * set.weightKg
+            guard let exercise = set.exercise else { continue }
+            if totalsByExerciseId[exercise.id] == nil {
+                order.append(exercise.id)
+                totalsByExerciseId[exercise.id] = ExerciseTotals(name: exercise.name.capitalized)
+            }
+            totalsByExerciseId[exercise.id]?.setCount += 1
+            totalsByExerciseId[exercise.id]?.totalReps += set.reps
+            totalsByExerciseId[exercise.id]?.volumeKg += Double(set.reps) * set.weightKg
+        }
+
+        var lines = order.compactMap { id -> String? in
+            guard let totals = totalsByExerciseId[id] else { return nil }
+            return "\(totals.name): \(totals.setCount) series, \(totals.totalReps) reps, \(Int(totals.volumeKg)) kg"
+        }
+        lines.append("Volumen total: \(Int(totalVolumeKg)) kg")
+        return lines.joined(separator: "\n")
     }
 
     /// specs/modules/02-ios-core-and-sync.md §3: queries today's totals and

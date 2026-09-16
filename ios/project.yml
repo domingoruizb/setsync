@@ -39,9 +39,12 @@ targets:
           - CFBundleURLName: com.domingoruizb.setsync
             CFBundleURLSchemes:
               - setsync-ciq
-        # HealthKit, read-only (specs/modules/02-ios-core-and-sync.md §3).
-        NSHealthShareUsageDescription: "SetSync reads your daily steps and calories to show them on your dashboard."
-        NSHealthUpdateUsageDescription: "SetSync does not write health data; HealthKit requires this description regardless."
+        # HealthKit: reads daily steps/calories (specs/modules/02-ios-core-and-sync.md §3)
+        # and, since the post-launch Apple Health export feature, writes
+        # completed workouts as HKWorkout entries so other apps (e.g.
+        # Strava, via its own free Health sync) can pick them up.
+        NSHealthShareUsageDescription: "SetSync lee tus pasos y calorías diarias para mostrarlos en tu resumen de Hoy."
+        NSHealthUpdateUsageDescription: "SetSync guarda tus entrenamientos de fuerza en Salud para que otras apps, como Strava, puedan sincronizarlos."
     entitlements:
       path: App/Sources/SetSync.entitlements
       properties:

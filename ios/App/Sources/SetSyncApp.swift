@@ -21,10 +21,14 @@ struct SetSyncApp: App {
 
         // Both services share the container's main context so writes from
         // either one are visible to @Query in the tab views without a
-        // separate cross-context sync step.
+        // separate cross-context sync step. healthKitService is built
+        // first now: GarminSyncService takes it as a dependency so it can
+        // auto-export a session to Apple Health the instant the watch's
+        // own SESSION_EVENT: STOP arrives.
         let context = container.mainContext
-        _garminSyncService = StateObject(wrappedValue: GarminSyncService(modelContext: context))
-        healthKitService = HealthKitService(modelContext: context)
+        let health = HealthKitService(modelContext: context)
+        healthKitService = health
+        _garminSyncService = StateObject(wrappedValue: GarminSyncService(modelContext: context, healthKitService: health))
         geminiExerciseClassifier = GeminiExerciseClassifier()
 
         // specs/modules/04-history-and-navigation.md §2: one-time pre-seed

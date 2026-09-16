@@ -25,12 +25,14 @@ final class GarminSyncService: NSObject, ObservableObject, IQUIOverrideDelegate,
     private static let garminAppUUID = UUID(uuidString: "145fa933-0711-4e6f-9263-d5d10098afff")!
 
     private let modelContext: ModelContext
+    private let healthKitService: HealthKitService
     @Published private(set) var pairedDevice: IQDevice?
     @Published private(set) var deviceStatus: IQDeviceStatus?
     private var garminApp: IQApp?
 
-    init(modelContext: ModelContext) {
+    init(modelContext: ModelContext, healthKitService: HealthKitService) {
         self.modelContext = modelContext
+        self.healthKitService = healthKitService
         super.init()
         ConnectIQ.sharedInstance().initialize(withUrlScheme: "setsync-ciq", uiOverrideDelegate: self)
     }
@@ -176,6 +178,11 @@ final class GarminSyncService: NSObject, ObservableObject, IQUIOverrideDelegate,
                     activeSession.endDate = Date()
                     activeSession.status = .completed
                     try? self.modelContext.save()
+                    // Post-launch addition: auto-export to Apple Health the
+                    // instant a session finishes via the watch's own STOP
+                    // event, mirroring ActiveWorkoutView's manual "Finalizar
+                    // Entrenamiento" trigger (finishWorkout()).
+                    self.healthKitService.saveWorkout(session: activeSession)
                 }
             }
         }

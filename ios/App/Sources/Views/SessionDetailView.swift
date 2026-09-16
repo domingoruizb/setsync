@@ -8,10 +8,13 @@ import SwiftUI
 /// `ExerciseDetailView` (Task 6.4)).
 struct SessionDetailView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.healthKitService) private var healthKitService
 
     let session: WorkoutSession
 
     @State private var setPendingEdit: WorkoutSet?
+    @State private var isSavingToHealth = false
+    @State private var healthSaveErrorMessage: String?
 
     private var orderedSets: [WorkoutSet] {
         session.sets.sorted { $0.timestamp < $1.timestamp }
@@ -71,6 +74,10 @@ struct SessionDetailView: View {
                 headerContent
             }
 
+            Section {
+                healthSyncRow
+            }
+
             ForEach(groupedByExercise) { group in
                 Section(group.exercise?.name.capitalized ?? "Sin etiquetar") {
                     ForEach(Array(group.sets.enumerated()), id: \.element.id) { index, set in
@@ -109,6 +116,64 @@ struct SessionDetailView: View {
         .navigationTitle(session.startDate.formatted(date: .abbreviated, time: .omitted))
         .sheet(item: $setPendingEdit) { set in
             SetEditView(set: set)
+        }
+        .alert(
+            "No se pudo guardar en Apple Health",
+            isPresented: Binding(
+                get: { healthSaveErrorMessage != nil },
+                set: { isPresented in
+                    if !isPresented { healthSaveErrorMessage = nil }
+                }
+            )
+        ) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(healthSaveErrorMessage ?? "")
+        }
+    }
+
+    // Three states: already synced (green checkmark, no action), session
+    // still in progress (nothing to export yet — HealthKitService itself
+    // requires an endDate), or a button to save now. Manual entry point
+    // alongside the automatic triggers in GarminSyncService/ActiveWorkoutView
+    // — e.g. if the session was edited after those already ran, or if the
+    // automatic save silently failed (permissions, offline) and the user
+    // wants to retry from here.
+    @ViewBuilder
+    private var healthSyncRow: some View {
+        if session.isSyncedToHealth {
+            Label("Sincronizado con Salud", systemImage: "checkmark.circle.fill")
+                .foregroundStyle(.green)
+        } else if session.endDate == nil {
+            Label("Termina el entrenamiento para guardarlo en Salud", systemImage: "heart.text.square")
+                .foregroundStyle(.secondary)
+        } else {
+            Button {
+                saveToHealth()
+            } label: {
+                HStack {
+                    Label("Guardar en Apple Health", systemImage: "heart.text.square")
+                    if isSavingToHealth {
+                        Spacer()
+                        ProgressView()
+                    }
+                }
+            }
+            .disabled(isSavingToHealth)
+        }
+    }
+
+    private func saveToHealth() {
+        guard let healthKitService else {
+            healthSaveErrorMessage = "Apple Health no está disponible en este dispositivo."
+            return
+        }
+        isSavingToHealth = true
+        healthKitService.saveWorkout(session: session) { success in
+            isSavingToHealth = false
+            if !success {
+                healthSaveErrorMessage = "No se pudo guardar el entrenamiento. Comprueba los permisos en Ajustes → Privacidad y seguridad → Salud → SetSync."
+            }
         }
     }
 

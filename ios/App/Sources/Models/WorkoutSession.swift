@@ -18,6 +18,18 @@ final class WorkoutSession {
     var totalRestTime: TimeInterval
     var status: Status
 
+    // Apple Health export: true once `HealthKitService.saveWorkout(session:)`
+    // has successfully written this session as an `HKWorkout` — guards
+    // against writing a duplicate workout if the user finishes a session
+    // twice (e.g. the automatic trigger already ran, then they also tap
+    // the manual button in SessionDetailView) or reopens the session
+    // later. The inline `= false` default (not just the initializer
+    // parameter's default below) is what lets SwiftData's automatic
+    // lightweight migration backfill this new column on an existing
+    // install's database with no destructive migration/data loss, unlike
+    // Task 6.1's breaking `Exercise` schema change.
+    var isSyncedToHealth: Bool = false
+
     init(
         id: UUID = UUID(),
         startDate: Date = Date(),
@@ -25,7 +37,8 @@ final class WorkoutSession {
         sets: [WorkoutSet] = [],
         totalActiveTime: TimeInterval = 0,
         totalRestTime: TimeInterval = 0,
-        status: Status = .inProgress
+        status: Status = .inProgress,
+        isSyncedToHealth: Bool = false
     ) {
         self.id = id
         self.startDate = startDate
@@ -34,6 +47,7 @@ final class WorkoutSession {
         self.totalActiveTime = totalActiveTime
         self.totalRestTime = totalRestTime
         self.status = status
+        self.isSyncedToHealth = isSyncedToHealth
     }
 }
 

@@ -14,6 +14,7 @@ import SwiftUI
 struct ActiveWorkoutView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.healthKitService) private var healthKitService
 
     let session: WorkoutSession
 
@@ -116,6 +117,10 @@ struct ActiveWorkoutView: View {
         session.endDate = Date()
         session.status = .completed
         try? modelContext.save()
+        // Post-launch addition: auto-export to Apple Health as soon as the
+        // session is finished manually, mirroring GarminSyncService's own
+        // trigger on the watch's SESSION_EVENT: STOP.
+        healthKitService?.saveWorkout(session: session)
         dismiss()
     }
 
