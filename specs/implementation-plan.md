@@ -55,3 +55,15 @@ These three fixes came from the first physical end-to-end test after the plan ab
   - **iOS, new manual fallback:** `ActiveWorkoutView` gained a "Finish Workout" toolbar button (`finishWorkout()`) that sets `status = .completed`/`endDate` and dismisses, completely independent of Bluetooth — for exactly the case named in the request, a BLE failure leaving no other way to close the session from the phone.
 
 **Compiled clean:** `monkeyc -d fr165 -f monkey.jungle -y developer_key -r` → `BUILD SUCCESSFUL`. iOS changes carry the same no-local-Swift-toolchain caveat as every iOS task since 3.1 — verified only via the next headless GitHub Actions run.
+
+---
+
+## Phase 6: Tab Navigation, Exercise Catalog & Session Analytics
+
+New post-launch feature area, specified in `specs/modules/04-history-and-navigation.md`. Three conflicts with existing frozen decisions were resolved with the user before writing that spec (per RULES.md §4): (1) the `Exercise` schema change is breaking and accepted with **data loss**, no migration plan; (2) the per-session muscle map reuses the **existing single 6-level heat scale** (`specs/01-system-spec.md` §3.2) rather than the user's initially-proposed separate 4-tier palette; (3) no body-silhouette reference image was ever attached, so the map continues to reuse `MuscleHeatMapView`'s modular tile grid (Task 5.2) rather than a hand-drawn `Path`.
+
+- [ ] **Task 6.1:** Extend the `Exercise` SwiftData model (`category: String`, `primaryMuscles: [MuscleGroup]` replacing singular `primaryMuscle`, `isCustom: Bool`, drop `createdAt`) and update every existing call site (`ExercisePickerView`, `MuscleHeatMapView.muscleScores(from:)`, `ExerciseHistoryView`) to the plural field. Pre-seed ~25 common strength exercises with correct `primaryMuscles`/`secondaryMuscles` already assigned (`isCustom = false`), inserted once when the catalog is empty.
+- [ ] **Task 6.2:** Implement `GeminiExerciseClassifier` (renamed/evolved from `MuscleClassifierService`) per `specs/modules/04-history-and-navigation.md` §3 — `primary`/`secondary` response schema, `GEMINI_API_KEY` from environment or the new Settings tab (`UserDefaults`), alert + manual muscle-group "chip" picker fallback, interactive preview before saving. Wired into `ExercisePickerView`'s creation flow.
+- [ ] **Task 6.3:** Restructure `SetSyncApp`/`DashboardView` into a 4-tab `TabView` (Today, Sessions, Exercises, Watch/Settings), moving Garmin pairing/status out of `DashboardView` and into the new Settings tab.
+- [ ] **Task 6.4:** Extend `ExerciseHistoryView` (Task 5.3) into the full `ExerciseDetailView` per §4: add estimated max 1RM (Epley formula) and total sets/reps counters alongside the existing PR and day-grouped history.
+- [ ] **Task 6.5:** Build `SessionDetailView` (Sessions tab) with per-session set breakdown grouped by exercise, plus the per-session `MuscleHeatMapView` instance and a muscle-activation-count legend, per §5.
