@@ -42,7 +42,7 @@
   - Opción directa: *"Crear nuevo ejercicio"* si la búsqueda no arroja resultados.
 - **Botón de Replicación ("Copiar Hacia Abajo"):**
   - Condición de visibilidad: Solo presente en la última serie con `exercise != nil` si existe al menos una serie posterior con `exercise == nil`.
-  - Acción: Propaga `currentSet.exercise` a todos los sets huérfanos (`exercise == nil`) subsecuentes de la sesión activa, deteniéndose en el primer set que ya tenga `exercise != nil` o al final de la lista (ampliado desde "asigna a nextSet"; decisión acordada en Task 4.3 de `specs/implementation-plan.md`).
+  - Acción: Asigna `currentSet.exercise` únicamente a `nextSet.exercise` (el set inmediatamente siguiente), no a toda la cadena de huérfanos posteriores. Task 4.3 había ampliado esto a una propagación en cascada hasta el primer set ya etiquetado; un post-launch fix posterior revirtió esa ampliación de vuelta a la redacción original de este párrafo, ya que el comportamiento en cascada resultó no ser el deseado en el uso real: tras la asignación, `nextSet` pasa a ser la nueva última serie etiquetada, por lo que el botón de replicación se reubica automáticamente sobre ella (o desaparece, si no queda ninguna serie huérfana después) sin lógica adicional, gracias a la condición de visibilidad de arriba.
   - Invariante: No muta ni repeticiones (`reps`) ni carga (`weightKg`).
 
 ---

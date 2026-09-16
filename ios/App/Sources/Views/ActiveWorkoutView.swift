@@ -168,16 +168,23 @@ struct ActiveWorkoutView: View {
         .padding(.vertical, 4)
     }
 
-    // specs/modules/02-ios-core-and-sync.md §4: propagates the source
-    // row's exercise to every subsequent orphan (exercise == nil) set,
-    // stopping at the first already-labeled set or the end of the list.
-    // Reps/weightKg are never touched (invariant). Persisted immediately.
+    // Reverted from the earlier "propagate to every subsequent orphan set"
+    // behavior back to the original spec wording (specs/modules/02-ios-core-and-sync.md
+    // §4: "Asigna currentSet.exercise a nextSet.exercise") — this task's
+    // explicit request: assign only to the single immediately-following
+    // set, not cascade through every later unlabeled one at once.
+    // `orderedSets[sourceIndex + 1]` is guaranteed unlabeled already,
+    // since `replicateSourceIndex` only ever points at the *last* labeled
+    // row — mutating it makes IT the new last-labeled row on the next
+    // body evaluation, so `replicateSourceIndex`/the "Copiar hacia abajo"
+    // button move onto it automatically (or disappear, if it was also the
+    // last row, or the row after it already has an exercise), with no
+    // extra state to manage. Reps/weightKg are never touched (invariant).
+    // Persisted immediately via the same shared modelContext every other
+    // mutation in this app already saves through.
     private func copyDown(from sourceIndex: Int) {
         guard let exercise = orderedSets[sourceIndex].exercise else { return }
-        for set in orderedSets[(sourceIndex + 1)...] {
-            guard set.exercise == nil else { break }
-            set.exercise = exercise
-        }
+        orderedSets[sourceIndex + 1].exercise = exercise
         try? modelContext.save()
     }
 
