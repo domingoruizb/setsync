@@ -123,3 +123,15 @@ Requested after the muscle-map rewrites above; adds destructive-data-management 
 - **[x] `seedIfNeeded` no longer early-returns on a non-empty table.** It now always runs the migration pass, then `insertMissingLibraryEntries` — which compares the full 25-entry `library` against existing (trimmed/lowercased) names and inserts only whatever's missing, so it correctly handles a fresh install, an already-Spanish install, and a partially-migrated one identically.
 - **[x] Idempotent and cheap on every later launch, by construction, not by an added "already migrated" flag:** once a row's `name` is the Spanish value, it no longer matches any English dictionary key, so `migrateEnglishNamesToSpanish` becomes a same-cost string-comparison pass with zero writes (`context.save()` is only called when something actually changed, in both migration and insertion).
 - **Verification:** same no-local-Swift-toolchain caveat as every iOS task since 3.1.
+
+---
+
+## Post-Launch Feature: Tiempo Total de Entrenamiento en la Pantalla RESTING (Garmin)
+
+First Garmin-side change since the Post-Launch Field Test Fixes — everything between then and now was iOS-only.
+
+- **[x] Session-start timestamp.** `SetSyncView` gained `_sessionStartMs`, captured once per session at the first `IDLE -> RESTING` transition (`handleTransition`, the same branch that already sends `SESSION_EVENT: START` — this is the FSM's one well-defined "a session just began" moment, since `RESTING -> IDLE` always ends the current session before another `IDLE -> RESTING` can start a new one).
+- **[x] RESTING's secondary line replaced, not added to.** The previous "N reps • W kg" last-completed-set summary (and its `_lastSetReps` field, now dead code and removed — `_lastSetWeightKg` stays, since `EDIT_SET` still seeds its default weight from it) is replaced by `"Total: " + elapsed time`, per this task's explicit instruction. The big central rest-timer readout above it is untouched — still the dominant metric, exactly as required ("Mantén visible de forma clara el temporizador del descanso actual").
+- **[x] MM:SS / HH:MM:SS formatting.** New `formatElapsedTime(totalSeconds)` delegates to the existing `formatMmSs` under an hour, and switches to `H:MM:SS` at/past 3600 seconds — a separate function from `formatMmSs` itself, which stays MM:SS-only for the rest timer and the `ACTIVE_SET` set-duration readout (neither of which should ever need the hour digit).
+- **[x] Per-second refresh — no new timer needed.** `onTimerTick`'s existing `WatchUi.requestUpdate()` already fires every second while the state is `RESTING` (it was added for the rest timer itself); since `drawResting` now recomputes `Total:` from `_sessionStartMs` on every `onUpdate`, it refreshes for free on the same tick, satisfying "el cronómetro se refresque cada segundo" without a second `Timer.Timer`.
+- **Compiled locally:** `monkeyc -d fr165 -f monkey.jungle -o bin/SetSync.prg -y developer_key -r` → `BUILD SUCCESSFUL`.

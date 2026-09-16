@@ -39,8 +39,12 @@ class SetSyncView extends WatchUi.View {
     private var _restStartMs as Number = 0;
     private var _activeSetStartMs as Number = 0;
 
-    // RESTING "last set summary" (§1); -1 reps means "no sets yet this session".
-    private var _lastSetReps as Number = -1;
+    // Captured once per session, at the first IDLE -> RESTING transition
+    // (session start) — drives RESTING's "Total: MM:SS" elapsed-workout
+    // readout, which replaced the previous last-completed-set reps/weight
+    // summary there.
+    private var _sessionStartMs as Number = 0;
+
     private var _lastSetWeightKg as Float = DEFAULT_WEIGHT_KG;
 
     // Captured at ACTIVE_SET -> EDIT_SET (set duration) and RESTING ->
@@ -175,8 +179,8 @@ class SetSyncView extends WatchUi.View {
 
     private function handleTransition(from as WorkoutState.State, to as WorkoutState.State) as Void {
         if (from == WorkoutState.IDLE && to == WorkoutState.RESTING) {
-            _lastSetReps = -1;
             _restStartMs = System.getTimer();
+            _sessionStartMs = _restStartMs;
             // specs/01-system-spec.md §2.2: session start (§3 "Inicia
             // sesión (SESSION_EVENT: START)"). Was left unimplemented in
             // Task 2.5; closed here so a WorkoutSession actually exists on
@@ -202,7 +206,6 @@ class SetSyncView extends WatchUi.View {
             // rest-timer fix).
             _restStartMs = System.getTimer();
         } else if (from == WorkoutState.EDIT_SET && to == WorkoutState.RESTING) {
-            _lastSetReps = _editReps;
             _lastSetWeightKg = _editWeightKg;
             _communicationsService.enqueueSetCompleted(_editReps, _editWeightKg, _lastSetDurationSec, _lastRestDurationSec);
         } else if (from == WorkoutState.RESTING && to == WorkoutState.IDLE) {
@@ -330,21 +333,20 @@ class SetSyncView extends WatchUi.View {
         dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_BLACK);
         dc.drawText(centerX, height / 2 - 70, Graphics.FONT_NUMBER_HOT, formatMmSs(restSeconds), Graphics.TEXT_JUSTIFY_CENTER);
 
-        // Secondary: last-set summary, numbers in white, units/separator in
-        // light gray — no "@", a clean structured "N reps  •  W kg".
+        // Secondary: total elapsed workout time since the session started
+        // (first IDLE -> RESTING transition), replacing the previous
+        // last-completed-set reps/weight summary here — the rest timer
+        // above remains the primary, dominant metric; this is a smaller
+        // "Total: MM:SS" (or HH:MM:SS past an hour) readout. Refreshed
+        // every second by the same _uiTimer tick that already drives the
+        // rest timer above (onTimerTick already requestUpdate()s while in
+        // RESTING).
         var summaryY = height / 2 + 60;
-        if (_lastSetReps < 0) {
-            dc.setColor(Graphics.COLOR_LT_GRAY, Graphics.COLOR_BLACK);
-            dc.drawText(centerX, summaryY, Graphics.FONT_TINY, "No sets yet", Graphics.TEXT_JUSTIFY_CENTER);
-        } else {
-            drawSegments(dc, centerX, summaryY, Graphics.FONT_TINY, [
-                [_lastSetReps.toString(), Graphics.COLOR_WHITE],
-                [" reps", Graphics.COLOR_LT_GRAY],
-                ["  •  ", Graphics.COLOR_LT_GRAY],
-                [_lastSetWeightKg.format("%.1f"), Graphics.COLOR_WHITE],
-                [" kg", Graphics.COLOR_LT_GRAY]
-            ]);
-        }
+        var totalSeconds = (System.getTimer() - _sessionStartMs) / 1000;
+        drawSegments(dc, centerX, summaryY, Graphics.FONT_TINY, [
+            ["Total: ", Graphics.COLOR_LT_GRAY],
+            [formatElapsedTime(totalSeconds), Graphics.COLOR_WHITE]
+        ]);
 
         // Discreet footer: transition hint, small and muted. Raised well
         // clear of the round bezel's bottom (was height - 52, too close).
@@ -510,6 +512,19 @@ class SetSyncView extends WatchUi.View {
         var minutes = totalSeconds / 60;
         var seconds = totalSeconds % 60;
         return minutes.format("%02d") + ":" + seconds.format("%02d");
+    }
+
+    // RESTING's "Total: " readout: MM:SS while under an hour, HH:MM:SS
+    // once a workout runs an hour or longer, per this task's explicit
+    // format requirement.
+    private function formatElapsedTime(totalSeconds as Number) as String {
+        if (totalSeconds < 3600) {
+            return formatMmSs(totalSeconds);
+        }
+        var hours = totalSeconds / 3600;
+        var minutes = (totalSeconds % 3600) / 60;
+        var seconds = totalSeconds % 60;
+        return hours.format("%d") + ":" + minutes.format("%02d") + ":" + seconds.format("%02d");
     }
 
     function getStateMachine() as WorkoutStateMachine {
