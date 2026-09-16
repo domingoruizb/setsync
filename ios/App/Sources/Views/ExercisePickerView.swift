@@ -24,18 +24,24 @@ struct ExercisePickerView: View {
         searchText.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
+    // `.localizedStandardContains` (not `.localizedCaseInsensitiveContains`)
+    // so searching with or without accents finds the same results — e.g.
+    // "sentadilla" must match "sentadilla" regardless of tildes, and a
+    // search like "peso muerto" should find it whether or not the user's
+    // keyboard/autocorrect added diacritics. It's also case-insensitive,
+    // matching the previous behavior.
     private var filteredExercises: [Exercise] {
         guard !trimmedSearchText.isEmpty else { return exercises }
-        return exercises.filter { $0.name.localizedCaseInsensitiveContains(trimmedSearchText) }
+        return exercises.filter { $0.name.localizedStandardContains(trimmedSearchText) }
     }
 
     // specs/modules/02-ios-core-and-sync.md §4: "Opción directa: 'Crear
     // nuevo ejercicio' si la búsqueda no arroja resultados" — shown
-    // whenever the trimmed search text has no exact (case-insensitive)
-    // match among existing exercises.
+    // whenever the trimmed search text has no exact (accent/case-
+    // insensitive) match among existing exercises.
     private var showsCreateOption: Bool {
         !trimmedSearchText.isEmpty &&
-            !exercises.contains { $0.name.caseInsensitiveCompare(trimmedSearchText) == .orderedSame }
+            !exercises.contains { $0.name.compare(trimmedSearchText, options: [.caseInsensitive, .diacriticInsensitive]) == .orderedSame }
     }
 
     var body: some View {

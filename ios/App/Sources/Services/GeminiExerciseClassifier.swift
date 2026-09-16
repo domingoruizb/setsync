@@ -1,7 +1,7 @@
 import Foundation
 
 /// specs/modules/04-history-and-navigation.md §3: classifies a new
-/// `Exercise`'s muscle activation via Gemini 1.5 Flash (Google AI Studio
+/// `Exercise`'s muscle activation via Gemini Flash-Lite (Google AI Studio
 /// REST API, free tier). Evolved from Task 5.1's `MuscleClassifierService`:
 /// the result is now `primary`/`secondary` arrays, matching
 /// `Exercise.primaryMuscles`/`secondaryMuscles` (Task 6.1) instead of a
@@ -14,8 +14,27 @@ final class GeminiExerciseClassifier {
         let secondaryMuscles: [MuscleGroup]
     }
 
+    /// Distinct, user-facing-describable failure reasons — replaces a
+    /// plain `nil` so the UI can show a descriptive message ("no hay
+    /// clave API configurada" vs. "fallo de red" vs. "respuesta
+    /// ilegible") instead of one generic "no se pudo clasificar" for
+    /// every case, per this task's explicit request.
+    enum ClassificationFailure {
+        case missingAPIKey
+        case requestFailed(String)
+        case unparsableResponse
+    }
+
+    // gemini-1.5-flash (used here until this task) was shut down by
+    // Google on 2025-09-29 — every call was failing with a 404, which is
+    // the actual root cause this task reported as "la IA está dando
+    // error". gemini-3.5-flash-lite is the current (as of this task,
+    // 2026) low-cost/low-latency Flash-Lite model, verified against
+    // Google's own docs and independently corroborated by third-party
+    // model-pricing trackers before picking it, given how easily a wrong
+    // model id silently reproduces this exact bug again.
     private static let endpoint = URL(
-        string: "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
+        string: "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent"
     )!
 
     private let urlSession: URLSession
@@ -32,14 +51,15 @@ final class GeminiExerciseClassifier {
         ProcessInfo.processInfo.environment["GEMINI_API_KEY"] ?? GeminiAPIKeyStore.storedKey()
     }
 
-    /// Never throws and never leaves the caller without a decision:
-    /// returns `nil` on a missing/empty key, a failed request (offline,
-    /// quota, timeout, non-2xx), or a response with no mappable primary
-    /// muscle. Callers should fall back to manual chip selection (Task
-    /// 6.2's `MuscleChipPicker`) when this returns `nil`.
-    func classify(exerciseName: String) async -> ClassificationResult? {
+    /// Never throws and never leaves the caller without a decision: on
+    /// any failure (missing/empty key, offline, quota, timeout, non-2xx,
+    /// unparsable response) returns `.failure` with a specific reason
+    /// instead of silently returning nothing. Callers should fall back to
+    /// manual chip selection (Task 6.2's `MuscleChipPicker`) on `.failure`
+    /// — the exercise can always still be saved by hand, never blocked.
+    func classify(exerciseName: String) async -> Result<ClassificationResult, ClassificationFailure> {
         guard let apiKey = currentAPIKey, !apiKey.isEmpty else {
-            return nil
+            return .failure(.missingAPIKey)
         }
 
         let url = Self.endpoint.appending(queryItems: [URLQueryItem(name: "key", value: apiKey)])
@@ -50,12 +70,18 @@ final class GeminiExerciseClassifier {
 
         do {
             let (data, response) = try await urlSession.data(for: request)
-            guard let httpResponse = response as? HTTPURLResponse, (200...299).contains(httpResponse.statusCode) else {
-                return nil
+            guard let httpResponse = response as? HTTPURLResponse else {
+                return .failure(.requestFailed("Respuesta inválida del servidor."))
             }
-            return parseResult(from: data)
+            guard (200...299).contains(httpResponse.statusCode) else {
+                return .failure(.requestFailed("El servidor respondió con el código \(httpResponse.statusCode)."))
+            }
+            guard let result = parseResult(from: data) else {
+                return .failure(.unparsableResponse)
+            }
+            return .success(result)
         } catch {
-            return nil
+            return .failure(.requestFailed(error.localizedDescription))
         }
     }
 
@@ -110,8 +136,14 @@ final class GeminiExerciseClassifier {
             let candidates = root["candidates"] as? [[String: Any]],
             let content = candidates.first?["content"] as? [String: Any],
             let parts = content["parts"] as? [[String: Any]],
-            let text = parts.first?["text"] as? String,
-            let innerData = text.data(using: .utf8),
+            let text = parts.first?["text"] as? String
+        else {
+            return nil
+        }
+
+        let cleanedText = Self.stripMarkdownCodeFence(from: text)
+        guard
+            let innerData = cleanedText.data(using: .utf8),
             let inner = try? JSONSerialization.jsonObject(with: innerData) as? [String: Any]
         else {
             return nil
@@ -128,6 +160,23 @@ final class GeminiExerciseClassifier {
 
         return ClassificationResult(primaryMuscles: primary, secondaryMuscles: secondary)
     }
+
+    // Defensive: `generationConfig.response_mime_type: "application/json"`
+    // should already return raw JSON with no markdown, but real-world
+    // responses have been observed still wrapping it in a ```json ... ```
+    // (or plain ```...```) fence — stripping it before decoding avoids a
+    // spurious `.unparsableResponse` failure on an otherwise-valid answer.
+    private static func stripMarkdownCodeFence(from text: String) -> String {
+        var trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.hasPrefix("```") else { return trimmed }
+        if let firstNewline = trimmed.firstIndex(of: "\n") {
+            trimmed = String(trimmed[trimmed.index(after: firstNewline)...])
+        }
+        if trimmed.hasSuffix("```") {
+            trimmed = String(trimmed.dropLast(3))
+        }
+        return trimmed.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
 }
 
 // Moved from Task 5.1's MuscleClassifierService.swift: maps the model's
@@ -139,6 +188,7 @@ extension MuscleGroup {
     init?(safeRawValue rawValue: String) {
         let normalized = rawValue
             .trimmingCharacters(in: .whitespacesAndNewlines)
+            .folding(options: .diacriticInsensitive, locale: nil)
             .lowercased()
             .replacingOccurrences(of: " ", with: "_")
             .replacingOccurrences(of: "-", with: "_")

@@ -8,9 +8,12 @@ struct ExercisesListView: View {
     @Query(sort: \Exercise.name) private var exercises: [Exercise]
     @State private var searchText = ""
 
+    // `.localizedStandardContains` is both case- and diacritic-insensitive
+    // (unlike `.localizedCaseInsensitiveContains`), so searching "sentadilla"
+    // with or without accents finds the same results.
     private var filteredExercises: [Exercise] {
         guard !searchText.isEmpty else { return exercises }
-        return exercises.filter { $0.name.localizedCaseInsensitiveContains(searchText) }
+        return exercises.filter { $0.name.localizedStandardContains(searchText) }
     }
 
     var body: some View {

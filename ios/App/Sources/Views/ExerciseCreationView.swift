@@ -2,11 +2,16 @@ import SwiftUI
 
 /// specs/modules/04-history-and-navigation.md §3: full custom-exercise
 /// creation flow. Attempts AI classification automatically on appearance;
-/// on failure (no key, offline, unparsable response) shows an alert and
-/// leaves the `MuscleChipPicker`s empty for manual selection — either way
-/// the same chips remain editable so the AI result is a starting point,
-/// never a locked-in answer. Presented as a sheet from `ExercisePickerView`
-/// (itself already a sheet — a stacked sheet, which SwiftUI supports).
+/// on failure shows a specific, descriptive inline message (missing API
+/// key vs. network/server error vs. an unparsable response) instead of one
+/// generic alert, with a shortcut into `GeminiAPISettingsView` for the
+/// missing-key case and a retry button otherwise — either way the
+/// `MuscleChipPicker`s stay usable for manual selection, so classification
+/// failing never blocks saving the exercise. The same chips remain
+/// editable after a successful AI classification too — its result is a
+/// starting point, never a locked-in answer. Presented as a sheet from
+/// `ExercisePickerView` (itself already a sheet — a stacked sheet, which
+/// SwiftUI supports).
 struct ExerciseCreationView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.geminiExerciseClassifier) private var classifier
@@ -18,7 +23,8 @@ struct ExerciseCreationView: View {
     @State private var primarySelection: Set<MuscleGroup> = []
     @State private var secondarySelection: Set<MuscleGroup> = []
     @State private var isClassifying = false
-    @State private var showsClassificationFailedAlert = false
+    @State private var classificationFailure: GeminiExerciseClassifier.ClassificationFailure?
+    @State private var isPresentingAPIKeySettings = false
 
     var body: some View {
         NavigationStack {
@@ -35,6 +41,22 @@ struct ExerciseCreationView: View {
                             ProgressView()
                             Text("Clasificando con IA…")
                                 .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+
+                if let failure = classificationFailure {
+                    Section {
+                        Label(message(for: failure), systemImage: "exclamationmark.triangle")
+                            .foregroundStyle(.orange)
+                        if case .missingAPIKey = failure {
+                            Button("Configurar clave API de Gemini") {
+                                isPresentingAPIKeySettings = true
+                            }
+                        } else {
+                            Button("Reintentar clasificación") {
+                                Task { await runClassification() }
+                            }
                         }
                     }
                 }
@@ -63,11 +85,22 @@ struct ExerciseCreationView: View {
             .task {
                 await runClassification()
             }
-            .alert("No se pudo clasificar automáticamente", isPresented: $showsClassificationFailedAlert) {
-                Button("OK", role: .cancel) {}
-            } message: {
-                Text("Selecciona manualmente los músculos primarios y secundarios abajo.")
+            .sheet(isPresented: $isPresentingAPIKeySettings) {
+                NavigationStack {
+                    GeminiAPISettingsView()
+                }
             }
+        }
+    }
+
+    private func message(for failure: GeminiExerciseClassifier.ClassificationFailure) -> String {
+        switch failure {
+        case .missingAPIKey:
+            return "No hay una clave API de Gemini configurada. Añádela en Ajustes o selecciona los músculos manualmente abajo."
+        case .requestFailed(let details):
+            return "No se pudo contactar con el servicio de IA (\(details)). Selecciona los músculos manualmente abajo."
+        case .unparsableResponse:
+            return "La IA devolvió una respuesta que no se pudo interpretar. Selecciona los músculos manualmente abajo."
         }
     }
 
@@ -121,19 +154,21 @@ struct ExerciseCreationView: View {
 
     private func runClassification() async {
         guard let classifier else {
-            showsClassificationFailedAlert = true
+            classificationFailure = .missingAPIKey
             return
         }
+        classificationFailure = nil
         isClassifying = true
-        let result = await classifier.classify(exerciseName: initialName)
+        let outcome = await classifier.classify(exerciseName: initialName)
         isClassifying = false
 
-        guard let result else {
-            showsClassificationFailedAlert = true
-            return
+        switch outcome {
+        case .success(let result):
+            primarySelection = Set(result.primaryMuscles)
+            secondarySelection = Set(result.secondaryMuscles)
+        case .failure(let failure):
+            classificationFailure = failure
         }
-        primarySelection = Set(result.primaryMuscles)
-        secondarySelection = Set(result.secondaryMuscles)
     }
 
     private func save() {
