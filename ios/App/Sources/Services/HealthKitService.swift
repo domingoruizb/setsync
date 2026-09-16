@@ -35,6 +35,12 @@ final class HealthKitService {
 
     init(modelContext: ModelContext) {
         self.modelContext = modelContext
+        // Very visible on purpose (🩺 prefix, printed unconditionally, not
+        // just on failure): the single most useful diagnostic line for
+        // "SetSync never appears under Ajustes → Salud" is knowing whether
+        // the device even reports HealthKit as available at all, from the
+        // moment the service is constructed.
+        print("🩺 [HealthKitService] init — HKHealthStore.isHealthDataAvailable() = \(HKHealthStore.isHealthDataAvailable())")
     }
 
     /// Requests read-only authorization for the three quantity types plus
@@ -53,38 +59,67 @@ final class HealthKitService {
     /// share/write authorization status (checked explicitly in
     /// `saveWorkout` below) is reliably introspectable, since the app is
     /// the one creating that data.
+    ///
+    /// The actual `healthStore.requestAuthorization` call is explicitly
+    /// dispatched onto the main queue: HealthKit's own authorization sheet
+    /// is UIKit-presented, and while Apple's API is documented as callable
+    /// from any thread, every call site in this app is already on the main
+    /// actor (SwiftUI `.task`/button actions) — this dispatch is a
+    /// defensive belt-and-suspenders guarantee, not a fix for a thread
+    /// SetSync was actually calling this from off of.
     func requestAuthorization(completion: @escaping (Bool) -> Void) {
-        guard HKHealthStore.isHealthDataAvailable() else {
+        let available = HKHealthStore.isHealthDataAvailable()
+        print("🩺 [HealthKitService] requestAuthorization (launch) — isHealthDataAvailable=\(available)")
+        guard available else {
             completion(false)
             return
         }
 
         let readTypes: Set<HKObjectType> = [stepCountType, activeEnergyType, basalEnergyType]
-        let shareTypes: Set<HKSampleType> = [HKObjectType.workoutType()]
-        healthStore.requestAuthorization(toShare: shareTypes, read: readTypes) { success, error in
-            if let error {
-                print("[HealthKitService] requestAuthorization (launch) failed: \(error.localizedDescription)")
+        let workoutType = HKObjectType.workoutType()
+        let shareTypes: Set<HKSampleType> = [workoutType]
+        print("🩺 [HealthKitService] requestAuthorization (launch) — current workout share status BEFORE request: \(Self.statusDescription(healthStore.authorizationStatus(for: workoutType)))")
+
+        DispatchQueue.main.async {
+            self.healthStore.requestAuthorization(toShare: shareTypes, read: readTypes) { success, error in
+                print("🩺 [HealthKitService] requestAuthorization (launch) completion — success=\(success), error=\(error?.localizedDescription ?? "nil"), workout share status AFTER=\(Self.statusDescription(self.healthStore.authorizationStatus(for: workoutType)))")
+                DispatchQueue.main.async {
+                    completion(success)
+                }
             }
-            DispatchQueue.main.async {
-                completion(success)
-            }
+        }
+    }
+
+    // HKAuthorizationStatus has no built-in human-readable description;
+    // this is what actually distinguishes "the permission sheet was never
+    // even shown" (.notDetermined — the real smoking gun if it never
+    // changes after calling requestAuthorization, which points at a
+    // missing/non-functional HealthKit entitlement on the installed
+    // binary rather than a user choice) from "the user/device explicitly
+    // refused" (.sharingDenied).
+    private static func statusDescription(_ status: HKAuthorizationStatus) -> String {
+        switch status {
+        case .notDetermined: return "no determinado (el diálogo de permisos nunca se ha mostrado)"
+        case .sharingDenied: return "denegado"
+        case .sharingAuthorized: return "autorizado"
+        @unknown default: return "desconocido (\(status.rawValue))"
         }
     }
 
     enum SaveWorkoutError: LocalizedError {
         case notAvailable
         case sessionNotFinished
-        case authorizationDenied
+        case authorizationNotGranted(HKAuthorizationStatus)
         case underlying(Error?)
 
         var errorDescription: String? {
             switch self {
             case .notAvailable:
-                return "Apple Health no está disponible en este dispositivo."
+                return "HealthKit no está disponible en este dispositivo."
             case .sessionNotFinished:
                 return "Termina el entrenamiento antes de guardarlo en Salud."
-            case .authorizationDenied:
-                return "SetSync no tiene permiso para escribir en Salud. Actívalo en Ajustes → Privacidad y seguridad → Salud → SetSync → Datos y acceso."
+            case .authorizationNotGranted(let status):
+                return "Permiso de Salud \(HealthKitService.statusDescription(status)). Ve a Ajustes → Privacidad y seguridad → Salud → SetSync → Datos y acceso, y activa Entrenamientos."
             case .underlying(let error):
                 return error?.localizedDescription ?? "Error desconocido al guardar en Salud."
             }
@@ -111,68 +146,85 @@ final class HealthKitService {
     /// cheap on every call, and removes any dependency on that earlier
     /// call having actually run/succeeded first.
     func saveWorkout(session: WorkoutSession, completion: ((Result<Void, SaveWorkoutError>) -> Void)? = nil) {
-        guard HKHealthStore.isHealthDataAvailable() else {
+        let available = HKHealthStore.isHealthDataAvailable()
+        let workoutType = HKObjectType.workoutType()
+        let statusBefore = healthStore.authorizationStatus(for: workoutType)
+        print("🩺 [HealthKitService] saveWorkout called — isHealthDataAvailable=\(available), workout share status=\(Self.statusDescription(statusBefore)), sessionId=\(session.id), isSyncedToHealth=\(session.isSyncedToHealth), endDate=\(session.endDate?.description ?? "nil")")
+
+        guard available else {
+            print("🩺 [HealthKitService] ABORT saveWorkout — HealthKit not available on this device.")
             completion?(.failure(.notAvailable))
             return
         }
         guard !session.isSyncedToHealth else {
+            print("🩺 [HealthKitService] saveWorkout no-op — session already synced.")
             completion?(.success(()))
             return
         }
         guard let endDate = session.endDate else {
+            print("🩺 [HealthKitService] ABORT saveWorkout — session has no endDate yet.")
             completion?(.failure(.sessionNotFinished))
             return
         }
 
-        let workoutType = HKObjectType.workoutType()
-        healthStore.requestAuthorization(toShare: [workoutType], read: []) { [weak self] _, authError in
-            guard let self else { return }
-            if let authError {
-                print("[HealthKitService] saveWorkout requestAuthorization failed: \(authError.localizedDescription)")
-            }
+        // Unconditional, regardless of statusBefore: per HealthKit's own
+        // contract, .notDetermined is the ONLY status that actually shows
+        // the system permission sheet — calling this when already
+        // .sharingAuthorized/.sharingDenied just invokes the completion
+        // immediately with no UI, so there is never a reason to skip it
+        // based on the status read above.
+        DispatchQueue.main.async {
+            self.healthStore.requestAuthorization(toShare: [workoutType], read: []) { [weak self] success, authError in
+                guard let self else { return }
+                let statusAfter = self.healthStore.authorizationStatus(for: workoutType)
+                print("🩺 [HealthKitService] saveWorkout requestAuthorization completion — success=\(success), error=\(authError?.localizedDescription ?? "nil"), workout share status=\(Self.statusDescription(statusAfter))")
 
-            guard self.healthStore.authorizationStatus(for: workoutType) == .sharingAuthorized else {
-                print("[HealthKitService] workout share authorization status: \(self.healthStore.authorizationStatus(for: workoutType).rawValue) (not .sharingAuthorized)")
-                DispatchQueue.main.async {
-                    completion?(.failure(.authorizationDenied))
-                }
-                return
-            }
-
-            let metadata: [String: Any] = [
-                HKMetadataKeyWorkoutBrandName: "SetSync",
-                HKMetadataKeyIndoorWorkout: true,
-                // Not a standard HealthKit metadata key — Apple has no
-                // official "workout notes" field, and there's no
-                // guarantee any given reading app (including Strava)
-                // surfaces an arbitrary metadata string as its own
-                // activity description. Included on a best-effort basis
-                // regardless, since it costs nothing to attach.
-                "SetSyncWorkoutSummary": self.workoutSummary(for: session)
-            ]
-
-            let workout = HKWorkout(
-                activityType: .traditionalStrengthTraining,
-                start: session.startDate,
-                end: endDate,
-                duration: endDate.timeIntervalSince(session.startDate),
-                totalEnergyBurned: nil,
-                totalDistance: nil,
-                metadata: metadata
-            )
-
-            self.healthStore.save(workout) { success, saveError in
-                if let saveError {
-                    print("[HealthKitService] save(workout:) failed: \(saveError.localizedDescription)")
-                }
-                DispatchQueue.main.async {
-                    if success {
-                        session.isSyncedToHealth = true
-                        try? self.modelContext.save()
-                        completion?(.success(()))
-                    } else {
-                        completion?(.failure(.underlying(saveError)))
+                guard statusAfter == .sharingAuthorized else {
+                    DispatchQueue.main.async {
+                        completion?(.failure(.authorizationNotGranted(statusAfter)))
                     }
+                    return
+                }
+
+                self.performSave(session: session, endDate: endDate, completion: completion)
+            }
+        }
+    }
+
+    private func performSave(session: WorkoutSession, endDate: Date, completion: ((Result<Void, SaveWorkoutError>) -> Void)?) {
+        let metadata: [String: Any] = [
+            HKMetadataKeyWorkoutBrandName: "SetSync",
+            HKMetadataKeyIndoorWorkout: true,
+            // Not a standard HealthKit metadata key — Apple has no
+            // official "workout notes" field, and there's no guarantee
+            // any given reading app (including Strava) surfaces an
+            // arbitrary metadata string as its own activity description.
+            // Included on a best-effort basis regardless, since it costs
+            // nothing to attach.
+            "SetSyncWorkoutSummary": workoutSummary(for: session)
+        ]
+
+        let workout = HKWorkout(
+            activityType: .traditionalStrengthTraining,
+            start: session.startDate,
+            end: endDate,
+            duration: endDate.timeIntervalSince(session.startDate),
+            totalEnergyBurned: nil,
+            totalDistance: nil,
+            metadata: metadata
+        )
+
+        print("🩺 [HealthKitService] performSave — calling healthStore.save(workout:) now.")
+        healthStore.save(workout) { [weak self] success, saveError in
+            print("🩺 [HealthKitService] healthStore.save(workout:) completion — success=\(success), error=\(saveError?.localizedDescription ?? "nil")")
+            DispatchQueue.main.async {
+                guard let self else { return }
+                if success {
+                    session.isSyncedToHealth = true
+                    try? self.modelContext.save()
+                    completion?(.success(()))
+                } else {
+                    completion?(.failure(.underlying(saveError)))
                 }
             }
         }
