@@ -19,8 +19,42 @@ struct ActiveWorkoutView: View {
 
     @State private var setPendingEdit: WorkoutSet?
 
+    // Manual end-date editing: deliberately *not* written straight to
+    // `session.endDate` as the user types, unlike `startDateBinding`
+    // below — this task's exact rule is "if a manual end time was given,
+    // use it; otherwise use Date() *at the moment the session is
+    // finished*," so the manual value only needs to exist locally until
+    // `finishWorkout()` decides what to commit. Seeded from any
+    // `endDate` the session might already have (reopening an oddly
+    // already-completed session, or restoring after the app relaunches)
+    // so the toggle/picker reflect real state rather than always
+    // resetting to "off."
+    @State private var hasManualEndDate: Bool
+    @State private var manualEndDate: Date
+
+    init(session: WorkoutSession) {
+        self.session = session
+        _hasManualEndDate = State(initialValue: session.endDate != nil)
+        _manualEndDate = State(initialValue: session.endDate ?? Date())
+    }
+
     private var orderedSets: [WorkoutSet] {
         session.sets.sorted { $0.timestamp < $1.timestamp }
+    }
+
+    // Live-bound, unlike the end date above: "por defecto viene
+    // inicializado con la fecha en la que se pulsó '+'; si el usuario no
+    // lo toca, esa será su hora de inicio" — i.e. there's no separate
+    // "confirm" step for the start time, it's just always the session's
+    // real startDate, editable in place at any time.
+    private var startDateBinding: Binding<Date> {
+        Binding(
+            get: { session.startDate },
+            set: { newValue in
+                session.startDate = newValue
+                try? modelContext.save()
+            }
+        )
     }
 
     // specs/modules/02-ios-core-and-sync.md §4: "Solo presente en la
@@ -41,6 +75,36 @@ struct ActiveWorkoutView: View {
                 sessionSummaryHeader
             }
 
+            // Manual/retroactive entry: lets a session logged without a
+            // paired Garmin (or entered after the fact) carry the real
+            // start/end times instead of whenever the "+" tab happened to
+            // be tapped.
+            Section("Horario") {
+                DatePicker("Inicio", selection: startDateBinding, displayedComponents: [.date, .hourAndMinute])
+
+                Toggle("Especificar hora de fin", isOn: $hasManualEndDate)
+
+                if hasManualEndDate {
+                    DatePicker(
+                        "Fin",
+                        selection: $manualEndDate,
+                        in: session.startDate...,
+                        displayedComponents: [.date, .hourAndMinute]
+                    )
+                }
+            }
+
+            Section {
+                Button {
+                    addSet()
+                } label: {
+                    Label("Añadir Serie", systemImage: "plus.circle.fill")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
+            }
+
             if orderedSets.isEmpty {
                 Text("Esperando series de tu reloj…")
                     .foregroundStyle(.secondary)
@@ -55,6 +119,13 @@ struct ActiveWorkoutView: View {
         }
         .navigationTitle("Entrenamiento Activo")
         .toolbar {
+            // A close affordance is only strictly necessary when this
+            // view is presented full-screen (from the "+" tab, which has
+            // no back button of its own), but it's harmless and
+            // consistent to show it everywhere this view appears.
+            ToolbarItem(placement: .cancellationAction) {
+                Button("Cerrar") { dismiss() }
+            }
             // Field-test finding: if the watch's SESSION_EVENT: STOP never
             // arrives (BLE drop, app killed on the watch, etc.), there was
             // previously no way to end the session from the phone at all.
@@ -110,13 +181,43 @@ struct ActiveWorkoutView: View {
     }
 
     // Manual, Bluetooth-independent equivalent of the watch's
-    // SESSION_EVENT: STOP handling (GarminSyncService.handleSessionEvent) —
-    // same effect (status = .completed, endDate set), triggered locally.
+    // SESSION_EVENT: STOP handling (GarminSyncService.handleSessionEvent):
+    // uses the manually-specified end time if the user set one via the
+    // "Horario" section above, otherwise falls back to right now — same
+    // effect either way (status = .completed, endDate set), triggered
+    // locally.
     private func finishWorkout() {
-        session.endDate = Date()
+        session.endDate = hasManualEndDate ? manualEndDate : Date()
         session.status = .completed
         try? modelContext.save()
         dismiss()
+    }
+
+    // Manual set entry, for logging without a paired Garmin (or
+    // retroactively): pre-fills the new set from the last existing one
+    // (same exercise/reps/weight) so entering several sets of the same
+    // exercise back-to-back only needs a weight/rep tweak, not re-picking
+    // the exercise every time; an empty session just gets zeroed
+    // defaults. `detectedAutomatically: false` distinguishes it from a
+    // Garmin-sourced set (not read anywhere today, but keeps the
+    // provenance honest). Manual sessions have no accelerometer/rest
+    // timer, so both durations are simply 0 rather than a fabricated
+    // guess — "en las sesiones manuales se omiten los descansos
+    // forzados."
+    private func addSet() {
+        let previous = orderedSets.last
+        let newSet = WorkoutSet(
+            exercise: previous?.exercise,
+            reps: previous?.reps ?? 0,
+            weightKg: previous?.weightKg ?? 0,
+            setDurationSeconds: 0,
+            restDurationSeconds: 0,
+            detectedAutomatically: false,
+            timestamp: Date()
+        )
+        modelContext.insert(newSet)
+        session.sets.append(newSet)
+        try? modelContext.save()
     }
 
     // Tapping the row (everything but "Copy Down") opens the full

@@ -168,9 +168,17 @@ final class GarminSyncService: NSObject, ObservableObject, IQUIOverrideDelegate,
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
             if action == "START" {
-                let session = WorkoutSession(status: .inProgress)
-                self.modelContext.insert(session)
-                try? self.modelContext.save()
+                // Guards against a second simultaneous in-progress
+                // session now that RootTabView's "+" tab can also start
+                // one manually from the phone: if one is already open
+                // (started manually, or a stray duplicate START from the
+                // watch itself), reuse it instead of forking the set
+                // stream across two sessions.
+                if self.fetchActiveSession() == nil {
+                    let session = WorkoutSession(status: .inProgress)
+                    self.modelContext.insert(session)
+                    try? self.modelContext.save()
+                }
             } else if action == "STOP" {
                 if let activeSession = self.fetchActiveSession() {
                     activeSession.endDate = Date()
