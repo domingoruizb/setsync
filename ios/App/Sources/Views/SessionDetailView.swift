@@ -169,10 +169,14 @@ struct SessionDetailView: View {
             return
         }
         isSavingToHealth = true
-        healthKitService.saveWorkout(session: session) { success in
+        healthKitService.saveWorkout(session: session) { result in
             isSavingToHealth = false
-            if !success {
-                healthSaveErrorMessage = "No se pudo guardar el entrenamiento. Comprueba los permisos en Ajustes → Privacidad y seguridad → Salud → SetSync."
+            if case .failure(let error) = result {
+                // The exact HealthKit-reported reason (missing
+                // authorization, invalid sample, etc.), not a generic
+                // message — HealthKitService.SaveWorkoutError already
+                // logs the same detail to the console via `print`.
+                healthSaveErrorMessage = error.localizedDescription
             }
         }
     }

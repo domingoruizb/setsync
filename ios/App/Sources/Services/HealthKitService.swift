@@ -39,14 +39,20 @@ final class HealthKitService {
 
     /// Requests read-only authorization for the three quantity types plus
     /// write authorization for `HKWorkoutType.workoutType()` (needed by
-    /// `saveWorkout(session:)` below). Never throws or crashes: on a
-    /// device/simulator without HealthKit, or if the user denies access,
+    /// `saveWorkout(session:)` below), and — critically — is what makes
+    /// SetSync appear at all under Ajustes → Privacidad y seguridad →
+    /// Salud → Acceso y dispositivos: an app is only listed there once it
+    /// has actually called `requestAuthorization` at least once, so this
+    /// must run unconditionally at launch (called from `RootTabView.task`)
+    /// rather than only lazily the first time a save is attempted. Never
+    /// throws or crashes: on a device/simulator without HealthKit,
     /// `completion(false)` is called instead. `success` here only reflects
-    /// whether the authorization sheet was presented/resolved, not which
-    /// individual permissions were granted — HealthKit deliberately never
-    /// reports share/write grant-vs-deny to the requesting app, so the
-    /// real signal for whether the write actually worked is `saveWorkout`'s
-    /// own `healthStore.save` completion, not this one.
+    /// whether the request itself resolved, not which individual
+    /// permissions were granted for the *read* types (HealthKit
+    /// deliberately never reports read grant-vs-deny, for privacy) — but
+    /// share/write authorization status (checked explicitly in
+    /// `saveWorkout` below) is reliably introspectable, since the app is
+    /// the one creating that data.
     func requestAuthorization(completion: @escaping (Bool) -> Void) {
         guard HKHealthStore.isHealthDataAvailable() else {
             completion(false)
@@ -55,9 +61,32 @@ final class HealthKitService {
 
         let readTypes: Set<HKObjectType> = [stepCountType, activeEnergyType, basalEnergyType]
         let shareTypes: Set<HKSampleType> = [HKObjectType.workoutType()]
-        healthStore.requestAuthorization(toShare: shareTypes, read: readTypes) { success, _ in
+        healthStore.requestAuthorization(toShare: shareTypes, read: readTypes) { success, error in
+            if let error {
+                print("[HealthKitService] requestAuthorization (launch) failed: \(error.localizedDescription)")
+            }
             DispatchQueue.main.async {
                 completion(success)
+            }
+        }
+    }
+
+    enum SaveWorkoutError: LocalizedError {
+        case notAvailable
+        case sessionNotFinished
+        case authorizationDenied
+        case underlying(Error?)
+
+        var errorDescription: String? {
+            switch self {
+            case .notAvailable:
+                return "Apple Health no está disponible en este dispositivo."
+            case .sessionNotFinished:
+                return "Termina el entrenamiento antes de guardarlo en Salud."
+            case .authorizationDenied:
+                return "SetSync no tiene permiso para escribir en Salud. Actívalo en Ajustes → Privacidad y seguridad → Salud → SetSync → Datos y acceso."
+            case .underlying(let error):
+                return error?.localizedDescription ?? "Error desconocido al guardar en Salud."
             }
         }
     }
@@ -71,47 +100,80 @@ final class HealthKitService {
     /// after `healthStore.save` actually succeeds) and against saving an
     /// unfinished session (`endDate == nil`). Safe to call from either the
     /// automatic finish-workout trigger or the manual button in
-    /// `SessionDetailView` — calling it twice on an already-synced session
+    /// `SessionDetailView` — calling it again on an already-synced session
     /// is a same-cost no-op, not a second HKWorkout.
-    func saveWorkout(session: WorkoutSession, completion: ((Bool) -> Void)? = nil) {
+    ///
+    /// Always (re-)requests authorization immediately before attempting
+    /// the save, per Apple's own guidance, instead of only trusting an
+    /// earlier one-time request elsewhere in the app (`RootTabView.task`):
+    /// calling `requestAuthorization` again when already authorized just
+    /// invokes its completion immediately with no UI, so this is safe and
+    /// cheap on every call, and removes any dependency on that earlier
+    /// call having actually run/succeeded first.
+    func saveWorkout(session: WorkoutSession, completion: ((Result<Void, SaveWorkoutError>) -> Void)? = nil) {
         guard HKHealthStore.isHealthDataAvailable() else {
-            completion?(false)
+            completion?(.failure(.notAvailable))
             return
         }
-        guard !session.isSyncedToHealth, let endDate = session.endDate else {
-            completion?(false)
+        guard !session.isSyncedToHealth else {
+            completion?(.success(()))
+            return
+        }
+        guard let endDate = session.endDate else {
+            completion?(.failure(.sessionNotFinished))
             return
         }
 
-        let metadata: [String: Any] = [
-            HKMetadataKeyWorkoutBrandName: "SetSync",
-            HKMetadataKeyIndoorWorkout: true,
-            // Not a standard HealthKit metadata key — Apple has no
-            // official "workout notes" field, and there's no guarantee
-            // any given reading app (including Strava) surfaces an
-            // arbitrary metadata string as its own activity description.
-            // Included on a best-effort basis regardless, per this task's
-            // explicit request, since it costs nothing to attach.
-            "SetSyncWorkoutSummary": workoutSummary(for: session)
-        ]
+        let workoutType = HKObjectType.workoutType()
+        healthStore.requestAuthorization(toShare: [workoutType], read: []) { [weak self] _, authError in
+            guard let self else { return }
+            if let authError {
+                print("[HealthKitService] saveWorkout requestAuthorization failed: \(authError.localizedDescription)")
+            }
 
-        let workout = HKWorkout(
-            activityType: .traditionalStrengthTraining,
-            start: session.startDate,
-            end: endDate,
-            duration: endDate.timeIntervalSince(session.startDate),
-            totalEnergyBurned: nil,
-            totalDistance: nil,
-            metadata: metadata
-        )
-
-        healthStore.save(workout) { [weak self] success, _ in
-            DispatchQueue.main.async {
-                if success {
-                    session.isSyncedToHealth = true
-                    try? self?.modelContext.save()
+            guard self.healthStore.authorizationStatus(for: workoutType) == .sharingAuthorized else {
+                print("[HealthKitService] workout share authorization status: \(self.healthStore.authorizationStatus(for: workoutType).rawValue) (not .sharingAuthorized)")
+                DispatchQueue.main.async {
+                    completion?(.failure(.authorizationDenied))
                 }
-                completion?(success)
+                return
+            }
+
+            let metadata: [String: Any] = [
+                HKMetadataKeyWorkoutBrandName: "SetSync",
+                HKMetadataKeyIndoorWorkout: true,
+                // Not a standard HealthKit metadata key — Apple has no
+                // official "workout notes" field, and there's no
+                // guarantee any given reading app (including Strava)
+                // surfaces an arbitrary metadata string as its own
+                // activity description. Included on a best-effort basis
+                // regardless, since it costs nothing to attach.
+                "SetSyncWorkoutSummary": self.workoutSummary(for: session)
+            ]
+
+            let workout = HKWorkout(
+                activityType: .traditionalStrengthTraining,
+                start: session.startDate,
+                end: endDate,
+                duration: endDate.timeIntervalSince(session.startDate),
+                totalEnergyBurned: nil,
+                totalDistance: nil,
+                metadata: metadata
+            )
+
+            self.healthStore.save(workout) { success, saveError in
+                if let saveError {
+                    print("[HealthKitService] save(workout:) failed: \(saveError.localizedDescription)")
+                }
+                DispatchQueue.main.async {
+                    if success {
+                        session.isSyncedToHealth = true
+                        try? self.modelContext.save()
+                        completion?(.success(()))
+                    } else {
+                        completion?(.failure(.underlying(saveError)))
+                    }
+                }
             }
         }
     }
