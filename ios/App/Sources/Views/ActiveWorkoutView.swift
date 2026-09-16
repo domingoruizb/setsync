@@ -11,6 +11,7 @@ import SwiftUI
 /// with an assigned exercise, when at least one later row is unlabeled.
 struct ActiveWorkoutView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.dismiss) private var dismiss
 
     let session: WorkoutSession
 
@@ -44,9 +45,29 @@ struct ActiveWorkoutView: View {
             }
         }
         .navigationTitle("Active Workout")
+        .toolbar {
+            // Field-test finding: if the watch's SESSION_EVENT: STOP never
+            // arrives (BLE drop, app killed on the watch, etc.), there was
+            // previously no way to end the session from the phone at all.
+            ToolbarItem(placement: .primaryAction) {
+                Button("Finish Workout") {
+                    finishWorkout()
+                }
+            }
+        }
         .sheet(item: $setPendingExerciseSelection) { set in
             ExercisePickerView(workoutSet: set)
         }
+    }
+
+    // Manual, Bluetooth-independent equivalent of the watch's
+    // SESSION_EVENT: STOP handling (GarminSyncService.handleSessionEvent) —
+    // same effect (status = .completed, endDate set), triggered locally.
+    private func finishWorkout() {
+        session.endDate = Date()
+        session.status = .completed
+        try? modelContext.save()
+        dismiss()
     }
 
     private func setRow(ordinal: Int, index: Int, set: WorkoutSet) -> some View {

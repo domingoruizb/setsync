@@ -77,7 +77,13 @@ class SetSyncDelegate extends WatchUi.BehaviorDelegate {
         } else if (state == WorkoutState.EDIT_SET) {
             _view.onBackShortPressed();
         } else if (state == WorkoutState.IDLE) {
-            System.exit();
+            // Field-test fix: don't tear the process down while the just-
+            // sent SESSION_EVENT: STOP transmit (and its "Session Saved"
+            // legibility window) is still pending — see
+            // SetSyncView.canExitApp()/handleTransition.
+            if (_view.canExitApp()) {
+                System.exit();
+            }
         }
         return true;
     }

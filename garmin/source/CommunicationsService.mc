@@ -35,12 +35,17 @@ class CommunicationsService extends Communications.ConnectionListener {
 
     // specs/01-system-spec.md §2.2: SESSION_EVENT (Garmin -> iOS), sent on
     // the FSM's IDLE <-> RESTING session boundary transitions. Fire-and-
-    // forget (no FIFO queue/retry): §4's offline queue is specified for
-    // SET_COMPLETED specifically, and there is no ACK defined for
-    // SESSION_EVENT to track against. Uses its own ConnectionListener
-    // rather than `self`, so it can't stomp on `_transmitInFlight` if a
-    // SET_COMPLETED happens to be in flight at the same moment.
-    function sendSessionEvent(action as String) as Void {
+    // forget in the sense of no FIFO queue/retry (§4's offline queue is
+    // specified for SET_COMPLETED specifically, and there is no ACK
+    // defined for SESSION_EVENT to track against), but the caller can
+    // still pass `onFinished` to know when the transmit attempt has
+    // settled (success or failure) — needed so the app can hold off
+    // System.exit() until the STOP event has actually left the device
+    // (field-test fix, see SetSyncView's RESTING -> IDLE handling). Uses
+    // its own ConnectionListener rather than `self`, so it can't stomp on
+    // `_transmitInFlight` if a SET_COMPLETED happens to be in flight at
+    // the same moment.
+    function sendSessionEvent(action as String, onFinished as Method?) as Void {
         var message = {
             "msgType" => "SESSION_EVENT",
             "payload" => {
@@ -48,7 +53,7 @@ class CommunicationsService extends Communications.ConnectionListener {
                 "timestamp" => SetCompletedPayload.unixTimestampSec()
             }
         };
-        Communications.transmit(message, null, new SessionEventListener());
+        Communications.transmit(message, null, new SessionEventListener(onFinished));
     }
 
     // §4: only send when the queue is non-empty and the link is up; never
@@ -97,17 +102,28 @@ class CommunicationsService extends Communications.ConnectionListener {
     }
 }
 
-// Dedicated no-op listener for sendSessionEvent()'s fire-and-forget
-// transmit, kept separate from CommunicationsService's own
-// _transmitInFlight bookkeeping (see sendSessionEvent's comment).
+// Listener for sendSessionEvent()'s transmit, kept separate from
+// CommunicationsService's own _transmitInFlight bookkeeping (see
+// sendSessionEvent's comment). Invokes the optional onFinished callback on
+// either outcome: the caller only needs to know the attempt settled, not
+// whether it succeeded (there's no retry to decide between here).
 class SessionEventListener extends Communications.ConnectionListener {
-    function initialize() {
+    private var _onFinished as Method?;
+
+    function initialize(onFinished as Method?) {
         Communications.ConnectionListener.initialize();
+        _onFinished = onFinished;
     }
 
     function onComplete() as Void {
+        if (_onFinished != null) {
+            _onFinished.invoke();
+        }
     }
 
     function onError() as Void {
+        if (_onFinished != null) {
+            _onFinished.invoke();
+        }
     }
 }

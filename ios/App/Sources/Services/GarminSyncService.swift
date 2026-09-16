@@ -125,8 +125,21 @@ final class GarminSyncService: NSObject, ObservableObject, IQUIOverrideDelegate,
         // dispatched to the main thread/actor since this delegate callback
         // isn't guaranteed to fire there and modelContext (container.mainContext,
         // wired in SetSyncApp) is meant to be used from main.
+        // Idempotency: CommunicationsService's 10s retry timer on Garmin
+        // can re-transmit the same queued SET_COMPLETED before its
+        // SYNC_ACK round-trip completes (BLE latency), so the exact same
+        // payload can legitimately arrive twice. Field testing confirmed
+        // this produced two identical WorkoutSets. `timestamp` is the
+        // payload's own de-dup key (assigned once by Garmin when the set
+        // was confirmed, so a genuine retry always repeats it exactly);
+        // comparing whole seconds avoids any Date/TimeInterval rounding.
         DispatchQueue.main.async { [weak self] in
             guard let self, let activeSession = self.fetchActiveSession() else { return }
+            let alreadyStored = activeSession.sets.contains {
+                Int($0.timestamp.timeIntervalSince1970) == timestamp
+            }
+            guard !alreadyStored else { return }
+
             let workoutSet = WorkoutSet(
                 exercise: nil,
                 reps: reps,
@@ -141,6 +154,8 @@ final class GarminSyncService: NSObject, ObservableObject, IQUIOverrideDelegate,
             try? self.modelContext.save()
         }
 
+        // Sent unconditionally, whether this was a fresh set or a
+        // duplicate — Garmin's queue must be drained either way (§4).
         sendSyncAck(setId: setId, to: app)
     }
 

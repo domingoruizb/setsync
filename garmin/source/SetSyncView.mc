@@ -16,11 +16,25 @@ class SetSyncView extends WatchUi.View {
     private const WEIGHT_DECIMAL_STEP_KG = 0.5;
     private const DEFAULT_WEIGHT_KG = 20.0;
 
+    // Minimum time the "Session Saved" screen stays up after RESTING ->
+    // IDLE, regardless of how quickly the STOP transmit settles — purely a
+    // legibility floor (not a spec value) so it can't flash by unread.
+    private const SESSION_SAVED_MIN_DISPLAY_MS = 1200;
+
     private var _stateMachine as WorkoutStateMachine = new WorkoutStateMachine();
     private var _repDetector as RepDetector = new RepDetector();
     private var _accelerometerSensor as AccelerometerSensor = new AccelerometerSensor(_repDetector);
     private var _communicationsService as CommunicationsService = new CommunicationsService();
     private var _uiTimer as Timer.Timer = new Timer.Timer();
+    private var _sessionSavedTimer as Timer.Timer = new Timer.Timer();
+
+    // Field-test fix: gates System.exit() (SetSyncDelegate, IDLE) until the
+    // SESSION_EVENT: STOP transmit has actually settled AND a minimum
+    // legibility window has passed — previously exit() could tear down the
+    // process before Communications.transmit() got the packet onto BLE.
+    private var _showingSessionSaved as Boolean = false;
+    private var _sessionStopTransmitFinished as Boolean = false;
+    private var _sessionSavedMinDisplayElapsed as Boolean = false;
 
     private var _restStartMs as Number = 0;
     private var _activeSetStartMs as Number = 0;
@@ -61,6 +75,11 @@ class SetSyncView extends WatchUi.View {
     function onUpdate(dc as Graphics.Dc) as Void {
         dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_BLACK);
         dc.clear();
+
+        if (_showingSessionSaved) {
+            drawSessionSaved(dc);
+            return;
+        }
 
         var state = _stateMachine.getState();
         if (state == WorkoutState.IDLE) {
@@ -162,7 +181,7 @@ class SetSyncView extends WatchUi.View {
             // sesión (SESSION_EVENT: START)"). Was left unimplemented in
             // Task 2.5; closed here so a WorkoutSession actually exists on
             // the iOS side before any SET_COMPLETED arrives for it.
-            _communicationsService.sendSessionEvent("START");
+            _communicationsService.sendSessionEvent("START", null);
         } else if (from == WorkoutState.RESTING && to == WorkoutState.ACTIVE_SET) {
             _lastRestDurationSec = (System.getTimer() - _restStartMs) / 1000;
             _repDetector.reset();
@@ -187,8 +206,8 @@ class SetSyncView extends WatchUi.View {
             _lastSetWeightKg = _editWeightKg;
             _communicationsService.enqueueSetCompleted(_editReps, _editWeightKg, _lastSetDurationSec, _lastRestDurationSec);
         } else if (from == WorkoutState.RESTING && to == WorkoutState.IDLE) {
-            // Session end (§3 "BACK (Hold)" row), driven by
-            // SetSyncDelegate's manually-timed BACK hold. Any
+            // Session end (§3 "BACK (Hold)" row — now triggered by a plain
+            // BACK press/swipe-right, see SetSyncDelegate). Any
             // SET_COMPLETED payload still sitting in
             // CommunicationsService's queue (not yet SYNC_ACK'd) is
             // deliberately left untouched here: the queue and its 10s
@@ -196,15 +215,65 @@ class SetSyncView extends WatchUi.View {
             // and keep retrying in the background regardless of which
             // screen is shown, so nothing pending is lost by returning to
             // IDLE.
+            if (Attention has :vibrate) {
+                Attention.vibrate([new Attention.VibeProfile(75, 300)]);
+            }
+            // Field-test fix: block System.exit() (see SetSyncDelegate)
+            // until the STOP transmit below has settled and this minimum
+            // window has elapsed, so BLE actually gets the packet out
+            // before the process can be torn down.
+            _showingSessionSaved = true;
+            _sessionStopTransmitFinished = false;
+            _sessionSavedMinDisplayElapsed = false;
+            _sessionSavedTimer.start(method(:onSessionSavedTimeout), SESSION_SAVED_MIN_DISPLAY_MS, false);
             // specs/01-system-spec.md §2.2: session end (§3 "SESSION_EVENT:
             // STOP"), closing the same gap as the START event above.
-            _communicationsService.sendSessionEvent("STOP");
+            _communicationsService.sendSessionEvent("STOP", method(:onSessionStopTransmitFinished));
         }
+    }
+
+    function onSessionStopTransmitFinished() as Void {
+        _sessionStopTransmitFinished = true;
+        checkSessionSavedDismissal();
+    }
+
+    function onSessionSavedTimeout() as Void {
+        _sessionSavedMinDisplayElapsed = true;
+        checkSessionSavedDismissal();
+    }
+
+    private function checkSessionSavedDismissal() as Void {
+        if (_sessionStopTransmitFinished && _sessionSavedMinDisplayElapsed) {
+            _showingSessionSaved = false;
+            WatchUi.requestUpdate();
+        }
+    }
+
+    // Consulted by SetSyncDelegate before calling System.exit() from IDLE:
+    // refuses while the STOP transmit/legibility window above is pending.
+    function canExitApp() as Boolean {
+        return !_showingSessionSaved;
     }
 
     //
     // --- Per-state rendering ---
     //
+
+    // Shown between RESTING -> IDLE while the SESSION_EVENT: STOP transmit
+    // is still in flight (see handleTransition/canExitApp) — confirms to
+    // the athlete that ending the session actually did something, since
+    // there's no other feedback between the vibration and the IDLE screen.
+    private function drawSessionSaved(dc as Graphics.Dc) as Void {
+        var width = dc.getWidth();
+        var height = dc.getHeight();
+        var centerX = width / 2;
+
+        dc.setColor(Graphics.COLOR_GREEN, Graphics.COLOR_BLACK);
+        dc.drawText(centerX, height / 2 - 20, Graphics.FONT_MEDIUM, "Session Saved", Graphics.TEXT_JUSTIFY_CENTER);
+
+        dc.setColor(Graphics.COLOR_LT_GRAY, Graphics.COLOR_BLACK);
+        dc.drawText(centerX, height / 2 + 20, Graphics.FONT_XTINY, "Syncing…", Graphics.TEXT_JUSTIFY_CENTER);
+    }
 
     private function drawIdle(dc as Graphics.Dc) as Void {
         var width = dc.getWidth();

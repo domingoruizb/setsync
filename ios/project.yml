@@ -19,6 +19,12 @@ targets:
       path: App/Sources/Info.plist
       properties:
         CFBundleDisplayName: SetSync
+        # Without a launch screen, iOS treats the app as unoptimized for
+        # current screen sizes and renders it letterboxed/scaled to a
+        # legacy compatibility resolution instead of full-screen. An empty
+        # UILaunchScreen dict is the modern, storyboard-free way to opt
+        # into native full-screen rendering.
+        UILaunchScreen: {}
         # Garmin Connect Mobile communication (specs/modules/02-ios-core-and-sync.md §5).
         NSBluetoothAlwaysUsageDescription: "SetSync uses Bluetooth to receive completed sets from your Garmin watch."
         NSBluetoothPeripheralUsageDescription: "SetSync uses Bluetooth to receive completed sets from your Garmin watch."
