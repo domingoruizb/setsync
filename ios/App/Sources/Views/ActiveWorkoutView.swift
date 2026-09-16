@@ -6,16 +6,18 @@ import SwiftUI
 /// SwiftData model instance (not a separate `@Query`), so `session.sets`
 /// keeps updating in place as `GarminSyncService` inserts new sets.
 ///
-/// Tapping a row's exercise name opens `ExercisePickerView` (Task 4.2).
-/// The "Copy Down" replicate button (Task 4.3) appears on the last row
-/// with an assigned exercise, when at least one later row is unlabeled.
+/// Tapping a row opens `SetEditView` (reps/weight/exercise, with delete),
+/// which itself opens `ExercisePickerView` (Task 4.2) to reassign the
+/// exercise. Rows also support swipe-to-delete directly. The "Copy Down"
+/// replicate button (Task 4.3) appears on the last row with an assigned
+/// exercise, when at least one later row is unlabeled.
 struct ActiveWorkoutView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
 
     let session: WorkoutSession
 
-    @State private var setPendingExerciseSelection: WorkoutSet?
+    @State private var setPendingEdit: WorkoutSet?
 
     private var orderedSets: [WorkoutSet] {
         session.sets.sorted { $0.timestamp < $1.timestamp }
@@ -42,6 +44,9 @@ struct ActiveWorkoutView: View {
                 ForEach(Array(orderedSets.enumerated()), id: \.element.id) { index, set in
                     setRow(ordinal: index + 1, index: index, set: set)
                 }
+                .onDelete { offsets in
+                    deleteSets(at: offsets)
+                }
             }
         }
         .navigationTitle("Entrenamiento Activo")
@@ -55,9 +60,18 @@ struct ActiveWorkoutView: View {
                 }
             }
         }
-        .sheet(item: $setPendingExerciseSelection) { set in
-            ExercisePickerView(workoutSet: set)
+        .sheet(item: $setPendingEdit) { set in
+            SetEditView(set: set)
         }
+    }
+
+    // offsets index into `orderedSets`, the exact same array/order the
+    // ForEach above was built from, so they map 1:1 onto its elements.
+    private func deleteSets(at offsets: IndexSet) {
+        for index in offsets {
+            modelContext.delete(orderedSets[index])
+        }
+        try? modelContext.save()
     }
 
     // Manual, Bluetooth-independent equivalent of the watch's
@@ -70,33 +84,40 @@ struct ActiveWorkoutView: View {
         dismiss()
     }
 
+    // Tapping the row (everything but "Copy Down") opens the full
+    // reps/weight/exercise edit sheet (`SetEditView`) — "Copy Down" stays
+    // a sibling button rather than being nested inside the same Button,
+    // since SwiftUI doesn't support a tappable control inside another
+    // tappable control's label.
     private func setRow(ordinal: Int, index: Int, set: WorkoutSet) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            HStack {
-                Text("Serie \(ordinal)")
-                    .font(.headline)
-                Spacer()
-                Text("\(set.reps) reps")
-                Text("•")
-                    .foregroundStyle(.secondary)
-                Text("\(set.weightKg, specifier: "%.1f") kg")
-            }
-
-            HStack {
-                Label(formattedDuration(set.setDurationSeconds), systemImage: "stopwatch")
-                Spacer()
-                Label(formattedDuration(set.restDurationSeconds), systemImage: "bed.double")
-            }
-            .font(.caption)
-            .foregroundStyle(.secondary)
-
-            // Task 4.2: searchable exercise dropdown with inline creation.
             Button {
-                setPendingExerciseSelection = set
+                setPendingEdit = set
             } label: {
-                Text(set.exercise?.name ?? "Seleccionar ejercicio…")
-                    .font(.subheadline)
-                    .foregroundStyle(set.exercise == nil ? .secondary : .primary)
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack {
+                        Text("Serie \(ordinal)")
+                            .font(.headline)
+                        Spacer()
+                        Text("\(set.reps) reps")
+                        Text("•")
+                            .foregroundStyle(.secondary)
+                        Text("\(set.weightKg, specifier: "%.1f") kg")
+                    }
+                    .foregroundStyle(.primary)
+
+                    HStack {
+                        Label(formattedDuration(set.setDurationSeconds), systemImage: "stopwatch")
+                        Spacer()
+                        Label(formattedDuration(set.restDurationSeconds), systemImage: "bed.double")
+                    }
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                    Text(set.exercise?.name ?? "Seleccionar ejercicio…")
+                        .font(.subheadline)
+                        .foregroundStyle(set.exercise == nil ? .secondary : .primary)
+                }
             }
             .buttonStyle(.plain)
 

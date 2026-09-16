@@ -7,7 +7,11 @@ import SwiftUI
 /// incremental pattern as `ExerciseHistoryView` (Task 5.3) →
 /// `ExerciseDetailView` (Task 6.4)).
 struct SessionDetailView: View {
+    @Environment(\.modelContext) private var modelContext
+
     let session: WorkoutSession
+
+    @State private var setPendingEdit: WorkoutSet?
 
     private var orderedSets: [WorkoutSet] {
         session.sets.sorted { $0.timestamp < $1.timestamp }
@@ -70,7 +74,15 @@ struct SessionDetailView: View {
             ForEach(groupedByExercise) { group in
                 Section(group.exercise?.name.capitalized ?? "Sin etiquetar") {
                     ForEach(Array(group.sets.enumerated()), id: \.element.id) { index, set in
-                        setRow(ordinal: index + 1, set: set)
+                        Button {
+                            setPendingEdit = set
+                        } label: {
+                            setRow(ordinal: index + 1, set: set)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    .onDelete { offsets in
+                        deleteSets(in: group, at: offsets)
                     }
                 }
             }
@@ -95,6 +107,22 @@ struct SessionDetailView: View {
             }
         }
         .navigationTitle(session.startDate.formatted(date: .abbreviated, time: .omitted))
+        .sheet(item: $setPendingEdit) { set in
+            SetEditView(set: set)
+        }
+    }
+
+    // Removes the tapped-to-delete/swiped sets directly from the
+    // modelContext; `session.sets` (a `@Model` relationship) and every
+    // computed property derived from it here (orderedSets,
+    // groupedByExercise, sessionMuscleScores, muscleStimulationCounts)
+    // recompute on the next body evaluation, which SwiftData triggers
+    // automatically after the save below.
+    private func deleteSets(in group: ExerciseGroup, at offsets: IndexSet) {
+        for index in offsets {
+            modelContext.delete(group.sets[index])
+        }
+        try? modelContext.save()
     }
 
     private var headerContent: some View {
