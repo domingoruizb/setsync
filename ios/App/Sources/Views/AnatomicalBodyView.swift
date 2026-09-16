@@ -1,23 +1,28 @@
 import SwiftUI
 
-/// specs/modules/03-ai-and-muscle-map.md §2 (superseding Task 5.2's
-/// decision): a vectorial anatomical body silhouette — anterior and
-/// posterior — replacing the modular tile grid `MuscleHeatMapView`. Task
-/// 5.2 chose the tile grid specifically because there was no reference
-/// image and no local Xcode/SwiftUI preview to visually verify a
-/// hand-drawn `Path`-based body outline; that constraint hasn't changed,
-/// so this view is deliberately built from simple, predictable composed
-/// primitives (`Ellipse`/`Capsule`/`RoundedRectangle`, plus a straight-line
-/// polygon for the torso) at proportions derived from standard body
-/// proportion ratios, rather than freehand bezier anatomical tracing —
-/// a schematic diagram, not fine-art anatomy. It should be expected to
-/// need visual polish once actually seen on a device, the same way the
-/// Garmin watch UI needed several iteration rounds after real hardware
-/// feedback.
+/// specs/modules/03-ai-and-muscle-map.md §2: a vectorial anatomical body
+/// silhouette — anterior and posterior — reactive to per-muscle scores.
 ///
-/// A pure/stateless-over-its-input component, like the view it replaces:
-/// the caller computes `scores` via `AnatomicalBodyView.muscleScores(from:)`
-/// and passes them in.
+/// **Revision history on this exact component:** Task 5.2 first built a
+/// tile grid (no reference image, no local SwiftUI preview to verify a
+/// hand-drawn `Path`). A first `Path`-based attempt then replaced the
+/// tiles with straight-line polygons and `Capsule`/`Ellipse`/
+/// `RoundedRectangle` primitives floating at fractional positions — you
+/// reported that result as unacceptable ("parece un esquema geométrico
+/// rígido con cajas y palos"). This version fixes the actual cause: every
+/// shape, including the base outline, is now built from a small set of
+/// hand-placed anatomical landmark points on a normalized 100×200 design
+/// canvas (`designWidth`/`designHeight` below — the "viewBox normalizado"
+/// you asked for), run through `smoothClosedPath(points:)`, a Catmull-Rom-
+/// style smoother that turns any polygon into a soft, organic closed
+/// curve by treating each vertex as a bulge control point between the
+/// midpoints of its neighbors. The same smoothing function draws the
+/// outline AND every muscle region, so nothing here is a rigid primitive
+/// any more — but it is still a hand-placed approximation, not a traced
+/// medical/athletic reference image (none was ever provided, and there is
+/// still no local Xcode/SwiftUI preview in this environment), so it
+/// should be expected to need further point-tuning once actually seen on
+/// a device.
 struct AnatomicalBodyView: View {
     let scores: [MuscleGroup: Double]
 
@@ -39,57 +44,37 @@ struct AnatomicalBodyView: View {
             .pickerStyle(.segmented)
 
             GeometryReader { proxy in
+                let transform = designTransform(for: proxy.size)
                 ZStack {
                     BodyOutlineShape()
-                        .stroke(Color(white: 0.85), lineWidth: 1.5)
+                        .stroke(Color(white: 0.82), lineWidth: 1.5)
 
-                    ForEach(Self.regionSpecs.filter { $0.region.side == selectedSide }, id: \.region) { spec in
-                        regionView(spec, size: proxy.size)
+                    ForEach(MuscleGroup.BodyRegion.allCases.filter { $0.side == selectedSide }, id: \.self) { region in
+                        regionView(region, transform: transform)
                     }
                 }
             }
-            .aspectRatio(0.46, contentMode: .fit)
+            .aspectRatio(designWidth / designHeight, contentMode: .fit)
             .frame(maxWidth: 260)
             .frame(maxWidth: .infinity)
         }
     }
 
     @ViewBuilder
-    private func regionView(_ spec: RegionSpec, size: CGSize) -> some View {
-        let color = MuscleGroup.heatColor(forScore: spec.region.score(from: scores))
-        let regionSize = CGSize(width: spec.widthFraction * size.width, height: spec.heightFraction * size.height)
-        let y = spec.yFraction * size.height
-
-        if spec.mirrored {
-            let dx = spec.xOffsetFraction * size.width
-            regionShape(spec.kind)
-                .foregroundStyle(color)
-                .frame(width: regionSize.width, height: regionSize.height)
-                .position(x: size.width / 2 - dx, y: y)
-            regionShape(spec.kind)
-                .foregroundStyle(color)
-                .frame(width: regionSize.width, height: regionSize.height)
-                .position(x: size.width / 2 + dx, y: y)
+    private func regionView(_ region: MuscleGroup.BodyRegion, transform: CGAffineTransform) -> some View {
+        let color = MuscleGroup.heatColor(forScore: region.score(from: scores))
+        let shape = regionShape(for: region)
+        if shape.mirrored {
+            smoothClosedPath(points: shape.points).applying(transform).fill(color)
+            smoothClosedPath(points: mirroredX(shape.points)).applying(transform).fill(color)
         } else {
-            regionShape(spec.kind)
-                .foregroundStyle(color)
-                .frame(width: regionSize.width, height: regionSize.height)
-                .position(x: size.width / 2, y: y)
-        }
-    }
-
-    @ViewBuilder
-    private func regionShape(_ kind: RegionSpec.Kind) -> some View {
-        switch kind {
-        case .capsule: Capsule()
-        case .ellipse: Ellipse()
-        case .roundedRect: RoundedRectangle(cornerRadius: 10)
+            smoothClosedPath(points: shape.points).applying(transform).fill(color)
         }
     }
 
     // specs/01-system-spec.md §3.2: Score = 1.0 per set for each primary
-    // muscle, 0.4 for each secondary muscle. Unchanged from the tile grid
-    // this view replaces — only the rendering changed, not the scoring.
+    // muscle, 0.4 for each secondary muscle. Unchanged across every
+    // revision of this view's rendering.
     static func muscleScores(from sets: [WorkoutSet]) -> [MuscleGroup: Double] {
         var scores: [MuscleGroup: Double] = [:]
         for set in sets {
@@ -109,8 +94,7 @@ struct AnatomicalBodyView: View {
 // taxonomy, used only for rendering this silhouette (the fine-grained
 // taxonomy itself, used everywhere else — scoring, AI classification,
 // chip pickers — is untouched). Every MuscleGroup case appears in exactly
-// one region's `muscles` list, the same invariant the tile grid enforced
-// over its own anterior/posterior lists.
+// one region's `muscles` list.
 extension MuscleGroup {
     enum BodyRegion: String, CaseIterable {
         case chest, frontDeltoids, biceps, forearms, abs, quads
@@ -154,101 +138,160 @@ extension MuscleGroup {
     }
 }
 
-// Proportional layout (fractions of the container's width/height, origin
-// top-leading) for each region's overlay shape. `xOffsetFraction` is the
-// horizontal distance from the body's vertical centerline; `mirrored`
-// regions are drawn twice, once on each side.
-private struct RegionSpec {
-    let region: MuscleGroup.BodyRegion
-    let xOffsetFraction: CGFloat
-    let yFraction: CGFloat
-    let widthFraction: CGFloat
-    let heightFraction: CGFloat
-    let mirrored: Bool
-    let kind: Kind
+// MARK: - Normalized anatomical coordinate system
 
-    enum Kind {
-        case capsule, ellipse, roundedRect
+// A fixed "viewBox" (100 units wide, 200 tall — a 1:2 aspect, close to a
+// standing figure cropped at the wrists/ankles) that every point below is
+// authored in. `designTransform(for:)` maps it onto the view's actual
+// pixel size once, so both the outline and every muscle region share
+// identical scale/alignment — nothing is positioned independently, unlike
+// the previous fraction-of-container-size approach.
+private let designWidth: CGFloat = 100
+private let designHeight: CGFloat = 200
+
+private func designTransform(for size: CGSize) -> CGAffineTransform {
+    let scale = min(size.width / designWidth, size.height / designHeight)
+    let dx = (size.width - designWidth * scale) / 2
+    let dy = (size.height - designHeight * scale) / 2
+    return CGAffineTransform(scaleX: scale, y: scale)
+        .concatenating(CGAffineTransform(translationX: dx, y: dy))
+}
+
+private func mirroredX(_ points: [CGPoint]) -> [CGPoint] {
+    points.map { CGPoint(x: designWidth - $0.x, y: $0.y) }
+}
+
+// Turns a polygon's vertices into a soft, organic closed curve: each
+// original vertex becomes a bulge control point for a quadratic curve
+// between the midpoints of its two neighbors (a standard "smooth a
+// polyline" trick). This is what replaces every straight-line polygon,
+// Capsule, Ellipse and RoundedRectangle from the previous revision — one
+// single technique used for the outline and every muscle region, so the
+// whole figure reads as one consistent family of soft shapes.
+private func smoothClosedPath(points: [CGPoint]) -> Path {
+    var path = Path()
+    guard points.count > 2 else { return path }
+    func midpoint(_ a: CGPoint, _ b: CGPoint) -> CGPoint {
+        CGPoint(x: (a.x + b.x) / 2, y: (a.y + b.y) / 2)
+    }
+    let count = points.count
+    path.move(to: midpoint(points[count - 1], points[0]))
+    for index in 0..<count {
+        let end = midpoint(points[index], points[(index + 1) % count])
+        path.addQuadCurve(to: end, control: points[index])
+    }
+    path.closeSubpath()
+    return path
+}
+
+// MARK: - Body outline
+
+// The right half of the silhouette, traced from the top of the head down
+// to the crotch: head → jaw → neck/shoulder → down the outer arm → around
+// the hand → back up the inner arm to the armpit (the gap between arm and
+// torso) → down the torso's side (chest/waist/hip curve) → down the outer
+// leg → around the foot → back up the inner leg to the crotch. The left
+// half is this same traversal mirrored and reversed (see `outlinePoints`),
+// so editing a landmark here only ever needs to happen once.
+private let outlineRightSide: [CGPoint] = [
+    CGPoint(x: 50, y: 2),    // top of head
+    CGPoint(x: 64, y: 12),   // head, right side
+    CGPoint(x: 58, y: 24),   // jaw
+    CGPoint(x: 61, y: 31),   // neck base
+    CGPoint(x: 79, y: 35),   // shoulder tip
+    CGPoint(x: 85, y: 46),   // deltoid bulge
+    CGPoint(x: 84, y: 70),   // elbow, outer edge
+    CGPoint(x: 79, y: 98),   // wrist, outer edge
+    CGPoint(x: 74, y: 107),  // hand tip
+    CGPoint(x: 73, y: 97),   // wrist, inner edge
+    CGPoint(x: 77, y: 69),   // elbow, inner edge
+    CGPoint(x: 72, y: 40),   // armpit (arm/torso gap)
+    CGPoint(x: 76, y: 52),   // chest bulge
+    CGPoint(x: 63, y: 75),   // waist
+    CGPoint(x: 69, y: 88),   // hip
+    CGPoint(x: 66, y: 110),  // thigh bulge, outer
+    CGPoint(x: 59, y: 138),  // knee, outer edge
+    CGPoint(x: 63, y: 156),  // calf bulge
+    CGPoint(x: 56, y: 184),  // ankle, outer edge
+    CGPoint(x: 58, y: 194),  // foot tip
+    CGPoint(x: 53, y: 184),  // ankle, inner edge
+    CGPoint(x: 54, y: 156),  // calf bulge, inner
+    CGPoint(x: 53, y: 138),  // knee, inner edge
+    CGPoint(x: 52, y: 100),  // thigh, inner edge
+    CGPoint(x: 50, y: 92)    // crotch (shared with the left leg)
+]
+
+private var outlinePoints: [CGPoint] {
+    let returnLeg = Array(outlineRightSide.dropFirst().dropLast().reversed())
+    return outlineRightSide + mirroredX(returnLeg)
+}
+
+private struct BodyOutlineShape: Shape {
+    func path(in rect: CGRect) -> Path {
+        smoothClosedPath(points: outlinePoints).applying(designTransform(for: rect.size))
     }
 }
 
-private extension AnatomicalBodyView {
-    static let regionSpecs: [RegionSpec] = [
-        // Anterior
-        RegionSpec(region: .chest, xOffsetFraction: 0.13, yFraction: 0.225, widthFraction: 0.16, heightFraction: 0.09, mirrored: true, kind: .ellipse),
-        RegionSpec(region: .frontDeltoids, xOffsetFraction: 0.28, yFraction: 0.175, widthFraction: 0.09, heightFraction: 0.09, mirrored: true, kind: .ellipse),
-        RegionSpec(region: .biceps, xOffsetFraction: 0.30, yFraction: 0.26, widthFraction: 0.075, heightFraction: 0.13, mirrored: true, kind: .capsule),
-        RegionSpec(region: .forearms, xOffsetFraction: 0.315, yFraction: 0.40, widthFraction: 0.065, heightFraction: 0.14, mirrored: true, kind: .capsule),
-        RegionSpec(region: .abs, xOffsetFraction: 0, yFraction: 0.33, widthFraction: 0.16, heightFraction: 0.17, mirrored: false, kind: .roundedRect),
-        RegionSpec(region: .quads, xOffsetFraction: 0.115, yFraction: 0.58, widthFraction: 0.11, heightFraction: 0.20, mirrored: true, kind: .capsule),
+// MARK: - Muscle region shapes
 
-        // Posterior
-        RegionSpec(region: .traps, xOffsetFraction: 0, yFraction: 0.185, widthFraction: 0.34, heightFraction: 0.11, mirrored: false, kind: .ellipse),
-        RegionSpec(region: .rearDeltoids, xOffsetFraction: 0.28, yFraction: 0.175, widthFraction: 0.09, heightFraction: 0.09, mirrored: true, kind: .ellipse),
-        RegionSpec(region: .lats, xOffsetFraction: 0.17, yFraction: 0.27, widthFraction: 0.15, heightFraction: 0.17, mirrored: true, kind: .ellipse),
-        RegionSpec(region: .triceps, xOffsetFraction: 0.30, yFraction: 0.26, widthFraction: 0.075, heightFraction: 0.13, mirrored: true, kind: .capsule),
-        RegionSpec(region: .lowerBack, xOffsetFraction: 0, yFraction: 0.40, widthFraction: 0.13, heightFraction: 0.08, mirrored: false, kind: .roundedRect),
-        RegionSpec(region: .glutes, xOffsetFraction: 0.095, yFraction: 0.465, widthFraction: 0.13, heightFraction: 0.10, mirrored: true, kind: .roundedRect),
-        RegionSpec(region: .hamstrings, xOffsetFraction: 0.115, yFraction: 0.58, widthFraction: 0.11, heightFraction: 0.20, mirrored: true, kind: .capsule),
-        RegionSpec(region: .calves, xOffsetFraction: 0.105, yFraction: 0.80, widthFraction: 0.08, heightFraction: 0.14, mirrored: true, kind: .capsule)
-    ]
+// Each region's points describe its right-side (or, for a centerline
+// region, its single) shape in the same 100×200 design space as the
+// outline above, so every region is positioned relative to real
+// anatomical landmarks (e.g. the biceps box sits between the same
+// shoulder/elbow points used for the arm's own outline) instead of an
+// independent fractional offset. `mirrored` regions are drawn twice, once
+// reflected across the centerline.
+private struct RegionShape {
+    let points: [CGPoint]
+    let mirrored: Bool
 }
 
-// Neutral light-gray base body contour: head, neck, torso (a straight-line
-// polygon, not bezier curves — easier to keep geometrically correct
-// without a visual preview), arms and legs (rounded-rect "capsule"
-// outlines). Anterior and posterior share the same outline; only the
-// overlaid muscle regions differ between the two sides.
-private struct BodyOutlineShape: Shape {
-    func path(in rect: CGRect) -> Path {
-        let w = rect.width
-        let h = rect.height
-        var path = Path()
-
-        let headRadius = 0.065 * w
-        let headCenterY = 0.06 * h + headRadius
-        path.addEllipse(in: CGRect(x: 0.5 * w - headRadius, y: headCenterY - headRadius, width: headRadius * 2, height: headRadius * 2))
-
-        let neckHalfWidth = 0.045 * w
-        let neckTopY = headCenterY + headRadius
-        let neckBottomY = 0.16 * h
-
-        let shoulderHalfWidth = 0.27 * w
-        let shoulderY = 0.16 * h
-        let waistHalfWidth = 0.155 * w
-        let waistY = 0.38 * h
-        let hipHalfWidth = 0.19 * w
-        let hipY = 0.44 * h
-
-        path.move(to: CGPoint(x: 0.5 * w - neckHalfWidth, y: neckTopY))
-        path.addLine(to: CGPoint(x: 0.5 * w - neckHalfWidth, y: neckBottomY))
-        path.addLine(to: CGPoint(x: 0.5 * w - shoulderHalfWidth, y: shoulderY))
-        path.addLine(to: CGPoint(x: 0.5 * w - waistHalfWidth, y: waistY))
-        path.addLine(to: CGPoint(x: 0.5 * w - hipHalfWidth, y: hipY))
-        path.addLine(to: CGPoint(x: 0.5 * w + hipHalfWidth, y: hipY))
-        path.addLine(to: CGPoint(x: 0.5 * w + waistHalfWidth, y: waistY))
-        path.addLine(to: CGPoint(x: 0.5 * w + shoulderHalfWidth, y: shoulderY))
-        path.addLine(to: CGPoint(x: 0.5 * w + neckHalfWidth, y: neckBottomY))
-        path.addLine(to: CGPoint(x: 0.5 * w + neckHalfWidth, y: neckTopY))
-
-        let armWidth = 0.075 * w
-        let armTopY = shoulderY
-        let armBottomY = 0.50 * h
-        for sign: CGFloat in [-1, 1] {
-            let armCenterX = 0.5 * w + sign * (shoulderHalfWidth + armWidth * 0.5)
-            let armRect = CGRect(x: armCenterX - armWidth / 2, y: armTopY, width: armWidth, height: armBottomY - armTopY)
-            path.addRoundedRect(in: armRect, cornerSize: CGSize(width: armWidth / 2, height: armWidth / 2))
-        }
-
-        let legWidth = 0.115 * w
-        let legTopY = hipY
-        let legBottomY = 0.92 * h
-        for sign: CGFloat in [-1, 1] {
-            let legCenterX = 0.5 * w + sign * (hipHalfWidth * 0.55)
-            let legRect = CGRect(x: legCenterX - legWidth / 2, y: legTopY, width: legWidth, height: legBottomY - legTopY)
-            path.addRoundedRect(in: legRect, cornerSize: CGSize(width: legWidth / 2, height: legWidth / 2))
-        }
-
-        return path
+private func regionShape(for region: MuscleGroup.BodyRegion) -> RegionShape {
+    switch region {
+    case .chest:
+        return RegionShape(points: [
+            CGPoint(x: 50, y: 40), CGPoint(x: 61, y: 39), CGPoint(x: 75, y: 48),
+            CGPoint(x: 70, y: 61), CGPoint(x: 56, y: 61)
+        ], mirrored: true)
+    case .frontDeltoids, .rearDeltoids:
+        return RegionShape(points: [
+            CGPoint(x: 73, y: 37), CGPoint(x: 85, y: 42), CGPoint(x: 84, y: 51), CGPoint(x: 75, y: 50)
+        ], mirrored: true)
+    case .biceps, .triceps:
+        return RegionShape(points: [
+            CGPoint(x: 79, y: 49), CGPoint(x: 85, y: 52), CGPoint(x: 82, y: 68), CGPoint(x: 76, y: 66)
+        ], mirrored: true)
+    case .forearms:
+        return RegionShape(points: [
+            CGPoint(x: 76, y: 70), CGPoint(x: 82, y: 73), CGPoint(x: 78, y: 96), CGPoint(x: 73, y: 94)
+        ], mirrored: true)
+    case .abs:
+        return RegionShape(points: [
+            CGPoint(x: 40, y: 60), CGPoint(x: 60, y: 60), CGPoint(x: 62, y: 87), CGPoint(x: 38, y: 87)
+        ], mirrored: false)
+    case .quads, .hamstrings:
+        return RegionShape(points: [
+            CGPoint(x: 52, y: 92), CGPoint(x: 67, y: 90), CGPoint(x: 65, y: 136), CGPoint(x: 54, y: 136)
+        ], mirrored: true)
+    case .traps:
+        return RegionShape(points: [
+            CGPoint(x: 50, y: 27), CGPoint(x: 75, y: 39), CGPoint(x: 50, y: 60), CGPoint(x: 25, y: 39)
+        ], mirrored: false)
+    case .lats:
+        return RegionShape(points: [
+            CGPoint(x: 72, y: 42), CGPoint(x: 78, y: 56), CGPoint(x: 68, y: 76), CGPoint(x: 60, y: 60)
+        ], mirrored: true)
+    case .lowerBack:
+        return RegionShape(points: [
+            CGPoint(x: 42, y: 79), CGPoint(x: 58, y: 79), CGPoint(x: 60, y: 91), CGPoint(x: 40, y: 91)
+        ], mirrored: false)
+    case .glutes:
+        return RegionShape(points: [
+            CGPoint(x: 50, y: 89), CGPoint(x: 67, y: 88), CGPoint(x: 65, y: 107), CGPoint(x: 50, y: 105)
+        ], mirrored: true)
+    case .calves:
+        return RegionShape(points: [
+            CGPoint(x: 55, y: 140), CGPoint(x: 64, y: 143), CGPoint(x: 61, y: 181), CGPoint(x: 55, y: 179)
+        ], mirrored: true)
     }
 }
