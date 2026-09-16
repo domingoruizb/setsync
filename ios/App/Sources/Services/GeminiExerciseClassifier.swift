@@ -19,7 +19,7 @@ final class GeminiExerciseClassifier {
     /// clave API configurada" vs. "fallo de red" vs. "respuesta
     /// ilegible") instead of one generic "no se pudo clasificar" for
     /// every case, per this task's explicit request.
-    enum ClassificationFailure {
+    enum ClassificationFailure: Error {
         case missingAPIKey
         case requestFailed(String)
         case unparsableResponse
