@@ -64,7 +64,7 @@ struct ExercisePickerView: View {
                                     // Shows only the first primary muscle
                                     // in this compact row; the full set is
                                     // visible in ExerciseCreationView/
-                                    // ExerciseHistoryView.
+                                    // ExerciseDetailView.
                                     Text(exercise.primaryMuscles.first.map { displayName(for: $0) } ?? "—")
                                         .font(.caption)
                                         .foregroundStyle(.secondary)
@@ -72,10 +72,10 @@ struct ExercisePickerView: View {
                             }
                             .buttonStyle(.plain)
 
-                            // Task 5.3: history/detail entry point,
+                            // Task 5.3/6.4: history/detail entry point,
                             // separate from the row's select action.
                             NavigationLink {
-                                ExerciseHistoryView(exercise: exercise)
+                                ExerciseDetailView(exercise: exercise)
                             } label: {
                                 Image(systemName: "info.circle")
                             }

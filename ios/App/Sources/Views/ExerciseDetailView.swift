@@ -1,11 +1,11 @@
 import SwiftData
 import SwiftUI
 
-/// Task 5.3: no dedicated spec subsection exists for this view — scope was
-/// fixed directly with the user against the models already frozen in
-/// Task 1.2 (`Exercise`, `WorkoutSet`). Per-exercise history grouped by
-/// day, with PR and most-recent volume highlighted in the header.
-struct ExerciseHistoryView: View {
+/// specs/modules/04-history-and-navigation.md §4: per-exercise progression
+/// and history. Renamed/extended from Task 5.3's `ExerciseHistoryView`
+/// (same day-grouped history + PR + recent volume) with the two stats
+/// Task 6.4 adds: estimated max 1RM and all-time total sets/reps.
+struct ExerciseDetailView: View {
     let exercise: Exercise
 
     @Query private var allSets: [WorkoutSet]
@@ -16,15 +16,31 @@ struct ExerciseHistoryView: View {
             .sorted { $0.timestamp > $1.timestamp }
     }
 
-    // Progression indicator 1: all-time max weight for this exercise.
+    // PR / Top Weight: all-time max weight for this exercise.
     private var personalRecordKg: Double? {
         exerciseSets.map(\.weightKg).max()
     }
 
-    // Progression indicator 2: reps × weight of the single most recent set.
+    // Recent volume: reps × weight of the single most recent set (Task 5.3).
     private var mostRecentVolumeKg: Double? {
         guard let mostRecent = exerciseSets.first else { return nil }
         return Double(mostRecent.reps) * mostRecent.weightKg
+    }
+
+    // specs/modules/04-history-and-navigation.md §4: Epley formula,
+    // weight * (1 + reps / 30), evaluated per set — the max across all
+    // sets, not necessarily the same set as the raw PR (a heavier single
+    // rarely beats a slightly lighter set done for more reps).
+    private var estimatedOneRepMaxKg: Double? {
+        exerciseSets.map { $0.weightKg * (1 + Double($0.reps) / 30.0) }.max()
+    }
+
+    private var totalSets: Int {
+        exerciseSets.count
+    }
+
+    private var totalReps: Int {
+        exerciseSets.reduce(0) { $0 + $1.reps }
     }
 
     private struct DayGroup: Identifiable {
@@ -71,25 +87,25 @@ struct ExerciseHistoryView: View {
     }
 
     private var progressionHeader: some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("PR")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                Text(personalRecordKg.map { String(format: "%.1f kg", $0) } ?? "—")
-                    .font(.title3)
-                    .bold()
-            }
-            Spacer()
-            VStack(alignment: .trailing, spacing: 2) {
-                Text("Recent volume")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                Text(mostRecentVolumeKg.map { String(format: "%.0f kg", $0) } ?? "—")
-                    .font(.title3)
-                    .bold()
-            }
+        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
+            statTile(title: "PR", value: personalRecordKg.map { String(format: "%.1f kg", $0) })
+            statTile(title: "Est. 1RM", value: estimatedOneRepMaxKg.map { String(format: "%.1f kg", $0) })
+            statTile(title: "Total sets", value: totalSets > 0 ? "\(totalSets)" : nil)
+            statTile(title: "Total reps", value: totalReps > 0 ? "\(totalReps)" : nil)
+            statTile(title: "Recent volume", value: mostRecentVolumeKg.map { String(format: "%.0f kg", $0) })
         }
+    }
+
+    private func statTile(title: String, value: String?) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Text(value ?? "—")
+                .font(.title3)
+                .bold()
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func formattedDate(_ date: Date) -> String {

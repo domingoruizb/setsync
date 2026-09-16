@@ -3,7 +3,7 @@ import SwiftUI
 
 /// specs/modules/04-history-and-navigation.md §1/§3: "Exercises" tab —
 /// the full catalog (pre-seeded + custom), searchable, navigating to
-/// `ExerciseHistoryView` (extended into `ExerciseDetailView` in Task 6.4).
+/// `ExerciseDetailView` (Task 5.3/6.4).
 struct ExercisesListView: View {
     @Query(sort: \Exercise.name) private var exercises: [Exercise]
     @State private var searchText = ""
@@ -17,7 +17,7 @@ struct ExercisesListView: View {
         NavigationStack {
             List(filteredExercises) { exercise in
                 NavigationLink {
-                    ExerciseHistoryView(exercise: exercise)
+                    ExerciseDetailView(exercise: exercise)
                 } label: {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(exercise.name.capitalized)
