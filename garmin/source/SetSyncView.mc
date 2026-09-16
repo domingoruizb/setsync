@@ -158,6 +158,31 @@ class SetSyncView extends WatchUi.View {
         adjustFocusedField(-1);
     }
 
+    // Hold-UP/Hold-DOWN on the weight-whole field: a coarser +/-5 kg jump
+    // instead of the usual +/-1 kg short-press step, for quickly reaching
+    // a working weight far from the default. Scoped tightly to EDIT_SET +
+    // :weightWhole on purpose — short presses (adjustFocusedField above)
+    // are untouched entirely, so existing 1 kg/1 rep step behavior is
+    // unaffected either way. Returns false (unhandled) whenever the hold
+    // doesn't apply here, so SetSyncDelegate.onKeyReleased() falls back to
+    // dispatching the normal short-press action instead of doing nothing.
+    private const MAX_WEIGHT_KG = 500.0;
+
+    function onWeightWholeHold(delta as Number) as Boolean {
+        if (_stateMachine.getState() != WorkoutState.EDIT_SET || _editFocus != :weightWhole) {
+            return false;
+        }
+        var newWeight = _editWeightKg + delta;
+        if (newWeight < 0.0) {
+            newWeight = 0.0;
+        } else if (newWeight > MAX_WEIGHT_KG) {
+            newWeight = MAX_WEIGHT_KG;
+        }
+        _editWeightKg = newWeight;
+        WatchUi.requestUpdate();
+        return true;
+    }
+
     private function adjustFocusedField(direction as Number) as Void {
         if (!_stateMachine.canAdjustSet()) {
             return;
