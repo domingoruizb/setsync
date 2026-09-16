@@ -12,7 +12,7 @@ struct SessionsListView: View {
         NavigationStack {
             Group {
                 if sessions.isEmpty {
-                    ContentUnavailableView("No sessions yet", systemImage: "calendar")
+                    ContentUnavailableView("Sin sesiones todavía", systemImage: "calendar")
                 } else {
                     List(sessions) { session in
                         NavigationLink {
@@ -23,7 +23,7 @@ struct SessionsListView: View {
                     }
                 }
             }
-            .navigationTitle("Sessions")
+            .navigationTitle("Sesiones")
         }
     }
 
@@ -31,7 +31,7 @@ struct SessionsListView: View {
         VStack(alignment: .leading, spacing: 2) {
             Text(session.startDate.formatted(date: .abbreviated, time: .shortened))
                 .font(.headline)
-            Text("\(session.sets.count) set(s) · \(session.status.rawValue.capitalized)")
+            Text("\(session.sets.count) series · \(session.status.displayName)")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }

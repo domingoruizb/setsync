@@ -63,7 +63,7 @@ struct ExerciseDetailView: View {
             }
 
             if groupedByDay.isEmpty {
-                Text("No history yet for this exercise")
+                Text("Sin historial para este ejercicio todavía")
                     .foregroundStyle(.secondary)
             } else {
                 ForEach(groupedByDay) { day in
@@ -76,7 +76,7 @@ struct ExerciseDetailView: View {
                                     .foregroundStyle(.secondary)
                             }
                         }
-                        Text("\(day.sets.count) set(s)")
+                        Text("\(day.sets.count) series")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -88,11 +88,11 @@ struct ExerciseDetailView: View {
 
     private var progressionHeader: some View {
         LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
-            statTile(title: "PR", value: personalRecordKg.map { String(format: "%.1f kg", $0) })
-            statTile(title: "Est. 1RM", value: estimatedOneRepMaxKg.map { String(format: "%.1f kg", $0) })
-            statTile(title: "Total sets", value: totalSets > 0 ? "\(totalSets)" : nil)
-            statTile(title: "Total reps", value: totalReps > 0 ? "\(totalReps)" : nil)
-            statTile(title: "Recent volume", value: mostRecentVolumeKg.map { String(format: "%.0f kg", $0) })
+            statTile(title: "Peso máx.", value: personalRecordKg.map { String(format: "%.1f kg", $0) })
+            statTile(title: "1RM est.", value: estimatedOneRepMaxKg.map { String(format: "%.1f kg", $0) })
+            statTile(title: "Series totales", value: totalSets > 0 ? "\(totalSets)" : nil)
+            statTile(title: "Reps totales", value: totalReps > 0 ? "\(totalReps)" : nil)
+            statTile(title: "Volumen reciente", value: mostRecentVolumeKg.map { String(format: "%.0f kg", $0) })
         }
     }
 

@@ -36,3 +36,18 @@ final class WorkoutSession {
         self.status = status
     }
 }
+
+// Refactor "Localización al Español": display-only Spanish label for the
+// session list row, distinct from `rawValue` (which stays English —
+// nothing external decodes this Status from JSON, but keeping identifiers
+// in English matches the rest of this project's frozen-taxonomy
+// convention).
+extension WorkoutSession.Status {
+    var displayName: String {
+        switch self {
+        case .inProgress: return "En curso"
+        case .completed: return "Completada"
+        case .discarded: return "Descartada"
+        }
+    }
+}

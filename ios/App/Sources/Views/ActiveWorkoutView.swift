@@ -36,7 +36,7 @@ struct ActiveWorkoutView: View {
     var body: some View {
         List {
             if orderedSets.isEmpty {
-                Text("Waiting for sets from your watch…")
+                Text("Esperando series de tu reloj…")
                     .foregroundStyle(.secondary)
             } else {
                 ForEach(Array(orderedSets.enumerated()), id: \.element.id) { index, set in
@@ -44,13 +44,13 @@ struct ActiveWorkoutView: View {
                 }
             }
         }
-        .navigationTitle("Active Workout")
+        .navigationTitle("Entrenamiento Activo")
         .toolbar {
             // Field-test finding: if the watch's SESSION_EVENT: STOP never
             // arrives (BLE drop, app killed on the watch, etc.), there was
             // previously no way to end the session from the phone at all.
             ToolbarItem(placement: .primaryAction) {
-                Button("Finish Workout") {
+                Button("Finalizar Entrenamiento") {
                     finishWorkout()
                 }
             }
@@ -73,7 +73,7 @@ struct ActiveWorkoutView: View {
     private func setRow(ordinal: Int, index: Int, set: WorkoutSet) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
-                Text("Set \(ordinal)")
+                Text("Serie \(ordinal)")
                     .font(.headline)
                 Spacer()
                 Text("\(set.reps) reps")
@@ -94,7 +94,7 @@ struct ActiveWorkoutView: View {
             Button {
                 setPendingExerciseSelection = set
             } label: {
-                Text(set.exercise?.name ?? "Select exercise…")
+                Text(set.exercise?.name ?? "Seleccionar ejercicio…")
                     .font(.subheadline)
                     .foregroundStyle(set.exercise == nil ? .secondary : .primary)
             }
@@ -104,7 +104,7 @@ struct ActiveWorkoutView: View {
                 Button {
                     copyDown(from: index)
                 } label: {
-                    Label("Copy Down", systemImage: "arrow.turn.right.down")
+                    Label("Copiar hacia abajo", systemImage: "arrow.turn.right.down")
                 }
                 .buttonStyle(.bordered)
             }

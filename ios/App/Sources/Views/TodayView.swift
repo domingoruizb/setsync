@@ -31,22 +31,22 @@ struct TodayView: View {
     // than a single session or an all-time total.
     private var todaysMuscleScores: [MuscleGroup: Double] {
         let todaysSets = allSets.filter { Calendar.current.isDateInToday($0.timestamp) }
-        return MuscleHeatMapView.muscleScores(from: todaysSets)
+        return AnatomicalBodyView.muscleScores(from: todaysSets)
     }
 
     var body: some View {
         NavigationStack {
             List {
-                Section("Today") {
+                Section("Hoy") {
                     dailySummaryContent
                 }
 
-                Section("Active Session") {
+                Section("Sesión Activa") {
                     activeSessionContent
                 }
 
-                Section("Muscle Activation") {
-                    MuscleHeatMapView(scores: todaysMuscleScores)
+                Section("Activación Muscular") {
+                    AnatomicalBodyView(scores: todaysMuscleScores)
                 }
             }
             .navigationTitle("SetSync")
@@ -64,12 +64,12 @@ struct TodayView: View {
     private var dailySummaryContent: some View {
         if let metrics = todayMetrics {
             HStack {
-                metricTile(title: "Steps", value: "\(metrics.stepCount)")
-                metricTile(title: "Active kcal", value: String(format: "%.0f", metrics.activeEnergyBurnedKcal))
-                metricTile(title: "Resting kcal", value: String(format: "%.0f", metrics.restingEnergyBurnedKcal))
+                metricTile(title: "Pasos", value: "\(metrics.stepCount)")
+                metricTile(title: "Kcal activas", value: String(format: "%.0f", metrics.activeEnergyBurnedKcal))
+                metricTile(title: "Kcal en reposo", value: String(format: "%.0f", metrics.restingEnergyBurnedKcal))
             }
         } else {
-            Text("No health data yet")
+            Text("Sin datos de salud todavía")
                 .foregroundStyle(.secondary)
         }
     }
@@ -97,9 +97,9 @@ struct TodayView: View {
             } label: {
                 HStack {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("Session in progress")
+                        Text("Sesión en curso")
                             .font(.headline)
-                        Text("\(session.sets.count) set(s) so far")
+                        Text("\(session.sets.count) series hasta ahora")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -107,7 +107,7 @@ struct TodayView: View {
                 }
             }
         } else {
-            Text("No active session")
+            Text("Sin sesión activa")
                 .foregroundStyle(.secondary)
         }
     }

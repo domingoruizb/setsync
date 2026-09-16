@@ -65,6 +65,44 @@ extension MuscleGroup {
     }
 }
 
+// Refactor "Localización al Español": display names shown anywhere in the
+// UI (chip pickers, exercise detail, session legends) are always Spanish
+// gym terminology — a display-only layer. The frozen English snake_case
+// `rawValue`s above (the Bluetooth/AI wire taxonomy) are never touched, so
+// GeminiExerciseClassifier's output matching (`MuscleGroup(safeRawValue:)`)
+// is unaffected. This single source of truth replaces four private
+// per-file `displayName(for:)` duplicates that previously just
+// capitalized the raw English identifier.
+extension MuscleGroup {
+    var displayName: String {
+        switch self {
+        case .chestUpper: return "Pecho superior"
+        case .chestMiddle: return "Pecho medio"
+        case .chestLower: return "Pecho inferior"
+        case .lats: return "Dorsal"
+        case .trapsUpper: return "Trapecio superior"
+        case .trapsMiddle: return "Trapecio medio"
+        case .rhomboids: return "Romboides"
+        case .lowerBack: return "Lumbar"
+        case .deltoidAnterior: return "Hombro anterior"
+        case .deltoidLateral: return "Hombro lateral"
+        case .deltoidPosterior: return "Hombro posterior"
+        case .biceps: return "Bíceps"
+        case .tricepsLongHead: return "Tríceps (cabeza larga)"
+        case .tricepsLateralHead: return "Tríceps (cabeza lateral)"
+        case .forearms: return "Antebrazos"
+        case .absUpper: return "Abdomen superior"
+        case .absLower: return "Abdomen inferior"
+        case .obliques: return "Oblicuos"
+        case .quadriceps: return "Cuádriceps"
+        case .hamstrings: return "Isquiotibiales"
+        case .glutes: return "Glúteos"
+        case .calves: return "Gemelos"
+        case .adductors: return "Aductores"
+        }
+    }
+}
+
 private extension Color {
     init(hex: UInt32) {
         self.init(

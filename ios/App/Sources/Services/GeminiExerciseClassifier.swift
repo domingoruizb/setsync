@@ -69,7 +69,7 @@ final class GeminiExerciseClassifier {
     // property names, not a Google-mandated shape.
     private func requestBody(exerciseName: String) -> [String: Any] {
         let prompt = """
-        Classify the given strength exercise (its name may be written in any language) against this fixed muscle taxonomy. Respond ONLY with a valid JSON object with keys "primary" (array of identifiers) and "secondary" (array of identifiers).
+        Classify the given strength exercise against this fixed muscle taxonomy. The exercise name will typically be written in Spanish, using common Spanish gym terminology (e.g. "press de banca", "sentadilla trasera", "peso muerto rumano"), but classify it correctly even if it is written in another language. Respond ONLY with a valid JSON object with keys "primary" (array of identifiers) and "secondary" (array of identifiers), using ONLY the English snake_case identifiers from the taxonomy below regardless of the exercise name's language.
 
         Allowed taxonomy:
         chest_upper, chest_middle, chest_lower, lats, traps_upper, traps_middle, rhomboids,

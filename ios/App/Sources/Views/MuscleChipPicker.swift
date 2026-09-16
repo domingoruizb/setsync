@@ -26,7 +26,7 @@ struct MuscleChipPicker: View {
 
     private func chip(for muscle: MuscleGroup) -> some View {
         let isSelected = selection.contains(muscle)
-        return Text(displayName(for: muscle))
+        return Text(muscle.displayName)
             .font(.caption2)
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
@@ -40,9 +40,5 @@ struct MuscleChipPicker: View {
                     selection.insert(muscle)
                 }
             }
-    }
-
-    private func displayName(for muscle: MuscleGroup) -> String {
-        muscle.rawValue.replacingOccurrences(of: "_", with: " ").capitalized
     }
 }

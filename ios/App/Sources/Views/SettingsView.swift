@@ -13,24 +13,24 @@ struct SettingsView: View {
             List {
                 // specs/modules/02-ios-core-and-sync.md §2 step 1 (pairing
                 // entry point).
-                Section("Garmin Watch") {
+                Section("Reloj Garmin") {
                     garminStatusContent
                 }
 
-                Section("AI") {
-                    NavigationLink("Gemini API Key") {
+                Section("IA") {
+                    NavigationLink("Clave API de Gemini") {
                         GeminiAPISettingsView()
                     }
                 }
             }
-            .navigationTitle("Watch / Settings")
+            .navigationTitle("Ajustes")
         }
     }
 
     private var garminStatusContent: some View {
         HStack {
             VStack(alignment: .leading, spacing: 2) {
-                Text(garminSyncService.pairedDevice?.friendlyName ?? "No device paired")
+                Text(garminSyncService.pairedDevice?.friendlyName ?? "Sin dispositivo emparejado")
                 if let status = garminSyncService.deviceStatus {
                     Text(String(describing: status))
                         .font(.caption)
@@ -38,7 +38,7 @@ struct SettingsView: View {
                 }
             }
             Spacer()
-            Button("Pair") {
+            Button("Emparejar") {
                 garminSyncService.selectDevice()
             }
         }

@@ -29,8 +29,8 @@ struct ExercisesListView: View {
                     }
                 }
             }
-            .searchable(text: $searchText, prompt: "Search exercises")
-            .navigationTitle("Exercises")
+            .searchable(text: $searchText, prompt: "Buscar ejercicio...")
+            .navigationTitle("Ejercicios")
         }
     }
 }

@@ -15,19 +15,19 @@ struct GeminiAPISettingsView: View {
     var body: some View {
         Form {
             Section {
-                SecureField("Gemini API Key", text: $apiKey)
-                Button("Save") {
+                SecureField("Clave API de Gemini", text: $apiKey)
+                Button("Guardar") {
                     GeminiAPIKeyStore.save(apiKey)
                     didSave = true
                 }
             } header: {
-                Text("AI Exercise Classification")
+                Text("Clasificación de Ejercicios con IA")
             } footer: {
-                Text("Used to automatically suggest muscle groups for new exercises. Get a free key at Google AI Studio.")
+                Text("Se usa para sugerir automáticamente los músculos de un nuevo ejercicio. Obtén una clave gratuita en Google AI Studio.")
             }
         }
-        .navigationTitle("Gemini API Key")
-        .alert("Saved", isPresented: $didSave) {
+        .navigationTitle("Clave API de Gemini")
+        .alert("Guardado", isPresented: $didSave) {
             Button("OK", role: .cancel) {}
         }
     }

@@ -59,7 +59,7 @@ New custom exercises are classified automatically instead of requiring the user 
 ### 2.4 Analytics & Muscle Map
 
 - **Per-exercise progression (`ExerciseDetailView`):** all-time PR (max weight), estimated max 1RM (Epley formula, `weight × (1 + reps / 30)`, evaluated per set and taking the maximum — not necessarily the same set as the raw PR), total sets/reps, and a day-grouped chronological history.
-- **Muscle heat map (`MuscleHeatMapView`):** a modular grid of labeled, colorable tiles (anterior/posterior toggle) representing every supported muscle group — a deliberate choice over a hand-drawn anatomical silhouette, which couldn't be visually verified without a design reference or a local SwiftUI preview environment.
+- **Muscle heat map (`AnatomicalBodyView`):** an anterior/posterior anatomical body silhouette built from composed SwiftUI primitives (`Ellipse`/`Capsule`/`RoundedRectangle` regions over a light-gray outline `Shape`) — a schematic diagram at standard body-proportion ratios, not a hand-traced illustration, since there's still no design reference or local SwiftUI preview environment to visually verify freehand anatomical `Path` art. The frozen 23-case muscle taxonomy is grouped into 14 coarser visual regions for rendering only (e.g. `chestUpper`/`chestMiddle`/`chestLower` all color the same "chest" shape, using the max of their scores); the underlying per-muscle scoring is unchanged.
   - **Stimulus score:** +1.0 per set for each of an exercise's primary muscles, +0.4 for each secondary muscle.
   - **Color scale (6 levels, shared by both platforms' color logic):**
 

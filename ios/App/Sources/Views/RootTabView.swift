@@ -7,16 +7,16 @@ struct RootTabView: View {
     var body: some View {
         TabView {
             TodayView()
-                .tabItem { Label("Today", systemImage: "house") }
+                .tabItem { Label("Hoy", systemImage: "house") }
 
             SessionsListView()
-                .tabItem { Label("Sessions", systemImage: "calendar") }
+                .tabItem { Label("Sesiones", systemImage: "calendar") }
 
             ExercisesListView()
-                .tabItem { Label("Exercises", systemImage: "dumbbell") }
+                .tabItem { Label("Ejercicios", systemImage: "dumbbell") }
 
             SettingsView()
-                .tabItem { Label("Watch / Settings", systemImage: "applewatch") }
+                .tabItem { Label("Ajustes", systemImage: "applewatch") }
         }
     }
 }

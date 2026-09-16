@@ -17,7 +17,7 @@ struct SessionDetailView: View {
     // and 6-level color scale as the Dashboard's "today" map (Task 5.2),
     // just scoped to this session's sets instead of today's.
     private var sessionMuscleScores: [MuscleGroup: Double] {
-        MuscleHeatMapView.muscleScores(from: orderedSets)
+        AnatomicalBodyView.muscleScores(from: orderedSets)
     }
 
     private struct MuscleStimulation: Identifiable {
@@ -68,7 +68,7 @@ struct SessionDetailView: View {
             }
 
             ForEach(groupedByExercise) { group in
-                Section(group.exercise?.name.capitalized ?? "Unlabeled") {
+                Section(group.exercise?.name.capitalized ?? "Sin etiquetar") {
                     ForEach(Array(group.sets.enumerated()), id: \.element.id) { index, set in
                         setRow(ordinal: index + 1, set: set)
                     }
@@ -77,17 +77,17 @@ struct SessionDetailView: View {
 
             // specs/modules/04-history-and-navigation.md §5: Muscle Map +
             // legend for this session only.
-            Section("Muscle Map") {
-                MuscleHeatMapView(scores: sessionMuscleScores)
+            Section("Mapa Muscular") {
+                AnatomicalBodyView(scores: sessionMuscleScores)
             }
 
             if !muscleStimulationCounts.isEmpty {
-                Section("Muscle Activation") {
+                Section("Activación Muscular") {
                     ForEach(muscleStimulationCounts) { entry in
                         HStack {
-                            Text(displayName(for: entry.muscle))
+                            Text(entry.muscle.displayName)
                             Spacer()
-                            Text("\(entry.setCount) set(s)")
+                            Text("\(entry.setCount) serie(s)")
                                 .foregroundStyle(.secondary)
                         }
                     }
@@ -100,20 +100,20 @@ struct SessionDetailView: View {
     private var headerContent: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
-                Text("Start")
+                Text("Inicio")
                 Spacer()
                 Text(session.startDate.formatted(date: .omitted, time: .shortened))
                     .foregroundStyle(.secondary)
             }
             if let endDate = session.endDate {
                 HStack {
-                    Text("End")
+                    Text("Fin")
                     Spacer()
                     Text(endDate.formatted(date: .omitted, time: .shortened))
                         .foregroundStyle(.secondary)
                 }
                 HStack {
-                    Text("Duration")
+                    Text("Duración")
                     Spacer()
                     Text(formattedDuration(endDate.timeIntervalSince(session.startDate)))
                         .foregroundStyle(.secondary)
@@ -128,7 +128,7 @@ struct SessionDetailView: View {
     private func setRow(ordinal: Int, set: WorkoutSet) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack {
-                Text("Set \(ordinal)")
+                Text("Serie \(ordinal)")
                 Spacer()
                 Text("\(set.reps) reps")
                 Text("•")
@@ -158,9 +158,5 @@ struct SessionDetailView: View {
         let hours = totalMinutes / 60
         let minutes = totalMinutes % 60
         return hours > 0 ? "\(hours)h \(minutes)m" : "\(minutes)m"
-    }
-
-    private func displayName(for muscle: MuscleGroup) -> String {
-        muscle.rawValue.replacingOccurrences(of: "_", with: " ").capitalized
     }
 }

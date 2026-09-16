@@ -23,38 +23,38 @@ struct ExerciseCreationView: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("Exercise") {
+                Section("Ejercicio") {
                     Text(initialName.capitalized)
                         .font(.headline)
-                    TextField("Category (optional)", text: $category)
+                    TextField("Categoría (opcional)", text: $category)
                 }
 
                 if isClassifying {
                     Section {
                         HStack {
                             ProgressView()
-                            Text("Classifying with AI…")
+                            Text("Clasificando con IA…")
                                 .foregroundStyle(.secondary)
                         }
                     }
                 }
 
-                Section("Preview") {
+                Section("Vista previa") {
                     previewGrid
                     legend
                 }
 
-                MuscleChipPicker(title: "Primary muscles", selection: $primarySelection)
+                MuscleChipPicker(title: "Músculos primarios", selection: $primarySelection)
 
-                MuscleChipPicker(title: "Secondary muscles", selection: $secondarySelection)
+                MuscleChipPicker(title: "Músculos secundarios", selection: $secondarySelection)
             }
-            .navigationTitle("New Exercise")
+            .navigationTitle("Nuevo Ejercicio")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
+                    Button("Cancelar") { dismiss() }
                 }
                 ToolbarItem(placement: .primaryAction) {
-                    Button("Save") {
+                    Button("Guardar") {
                         save()
                     }
                     .disabled(primarySelection.isEmpty)
@@ -63,15 +63,15 @@ struct ExerciseCreationView: View {
             .task {
                 await runClassification()
             }
-            .alert("Couldn't classify automatically", isPresented: $showsClassificationFailedAlert) {
+            .alert("No se pudo clasificar automáticamente", isPresented: $showsClassificationFailedAlert) {
                 Button("OK", role: .cancel) {}
             } message: {
-                Text("Select the primary and secondary muscles manually below.")
+                Text("Selecciona manualmente los músculos primarios y secundarios abajo.")
             }
         }
     }
 
-    // Not MuscleHeatMapView's real accumulated-score coloring (there is no
+    // Not AnatomicalBodyView's real accumulated-score coloring (there is no
     // training data for an exercise that doesn't exist yet) — a simpler,
     // dedicated 3-state preview: primary / secondary / unselected.
     private var previewGrid: some View {
@@ -95,7 +95,7 @@ struct ExerciseCreationView: View {
             .fill(color)
             .frame(height: 36)
             .overlay(
-                Text(displayName(for: muscle))
+                Text(muscle.displayName)
                     .font(.system(size: 8))
                     .multilineTextAlignment(.center)
                     .foregroundStyle(.black)
@@ -105,8 +105,8 @@ struct ExerciseCreationView: View {
 
     private var legend: some View {
         HStack(spacing: 16) {
-            legendEntry(color: .orange, label: "Primary")
-            legendEntry(color: .yellow, label: "Secondary")
+            legendEntry(color: .orange, label: "Primario")
+            legendEntry(color: .yellow, label: "Secundario")
         }
         .font(.caption2)
         .foregroundStyle(.secondary)
@@ -146,9 +146,5 @@ struct ExerciseCreationView: View {
         )
         onSave(exercise)
         dismiss()
-    }
-
-    private func displayName(for muscle: MuscleGroup) -> String {
-        muscle.rawValue.replacingOccurrences(of: "_", with: " ").capitalized
     }
 }

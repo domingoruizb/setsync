@@ -46,7 +46,7 @@ struct ExercisePickerView: View {
                         Button {
                             isPresentingCreation = true
                         } label: {
-                            Text("Create \u{201C}\(trimmedSearchText)\u{201D}…")
+                            Text("Crear \u{201C}\(trimmedSearchText)\u{201D}…")
                         }
                     }
                 }
@@ -65,7 +65,7 @@ struct ExercisePickerView: View {
                                     // in this compact row; the full set is
                                     // visible in ExerciseCreationView/
                                     // ExerciseDetailView.
-                                    Text(exercise.primaryMuscles.first.map { displayName(for: $0) } ?? "—")
+                                    Text(exercise.primaryMuscles.first.map(\.displayName) ?? "—")
                                         .font(.caption)
                                         .foregroundStyle(.secondary)
                                 }
@@ -84,11 +84,11 @@ struct ExercisePickerView: View {
                     }
                 }
             }
-            .searchable(text: $searchText, prompt: "Search exercises")
-            .navigationTitle("Select Exercise")
+            .searchable(text: $searchText, prompt: "Buscar ejercicio...")
+            .navigationTitle("Seleccionar Ejercicio")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
+                    Button("Cancelar") { dismiss() }
                 }
             }
             .sheet(isPresented: $isPresentingCreation) {
@@ -104,9 +104,5 @@ struct ExercisePickerView: View {
         workoutSet.exercise = exercise
         try? modelContext.save()
         dismiss()
-    }
-
-    private func displayName(for muscle: MuscleGroup) -> String {
-        muscle.rawValue.replacingOccurrences(of: "_", with: " ").capitalized
     }
 }
