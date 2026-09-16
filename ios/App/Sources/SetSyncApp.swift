@@ -6,7 +6,7 @@ struct SetSyncApp: App {
     private let modelContainer: ModelContainer
     @StateObject private var garminSyncService: GarminSyncService
     private let healthKitService: HealthKitService
-    private let muscleClassifierService: MuscleClassifierService
+    private let geminiExerciseClassifier: GeminiExerciseClassifier
 
     init() {
         let container: ModelContainer
@@ -25,7 +25,7 @@ struct SetSyncApp: App {
         let context = container.mainContext
         _garminSyncService = StateObject(wrappedValue: GarminSyncService(modelContext: context))
         healthKitService = HealthKitService(modelContext: context)
-        muscleClassifierService = MuscleClassifierService()
+        geminiExerciseClassifier = GeminiExerciseClassifier()
 
         // specs/modules/04-history-and-navigation.md §2: one-time pre-seed
         // of the exercise catalog, no-op once it's non-empty.
@@ -37,7 +37,7 @@ struct SetSyncApp: App {
             DashboardView()
                 .environmentObject(garminSyncService)
                 .environment(\.healthKitService, healthKitService)
-                .environment(\.muscleClassifierService, muscleClassifierService)
+                .environment(\.geminiExerciseClassifier, geminiExerciseClassifier)
                 .onOpenURL { url in
                     // specs/modules/02-ios-core-and-sync.md §2 step 1: Garmin
                     // Connect Mobile calls back into the `setsync-ciq` scheme

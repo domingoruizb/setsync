@@ -5,17 +5,20 @@ import SwiftUI
 /// searchable list of existing `Exercise`s with an inline "create new"
 /// fallback. Presented as a sheet from `ActiveWorkoutView`; assigns the
 /// chosen/created exercise directly onto `workoutSet` and persists it.
+///
+/// Task 6.2: the inline single-muscle quick-picker was replaced by
+/// `ExerciseCreationView` (AI classification + editable chips + preview),
+/// presented as its own sheet on top of this one.
 struct ExercisePickerView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.muscleClassifierService) private var muscleClassifierService
 
     let workoutSet: WorkoutSet
 
     @Query(sort: \Exercise.name) private var exercises: [Exercise]
 
     @State private var searchText = ""
-    @State private var newExerciseMuscle: MuscleGroup = .chestUpper
+    @State private var isPresentingCreation = false
 
     private var trimmedSearchText: String {
         searchText.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -40,7 +43,11 @@ struct ExercisePickerView: View {
             List {
                 if showsCreateOption {
                     Section {
-                        createExerciseRow
+                        Button {
+                            isPresentingCreation = true
+                        } label: {
+                            Text("Create \u{201C}\(trimmedSearchText)\u{201D}…")
+                        }
                     }
                 }
 
@@ -54,11 +61,10 @@ struct ExercisePickerView: View {
                                     Text(exercise.name)
                                         .foregroundStyle(.primary)
                                     Spacer()
-                                    // Task 6.1 minimal adaptation: shows
-                                    // only the first primary muscle now
-                                    // that Exercise.primaryMuscles is a
-                                    // list — Task 6.2 redesigns this
-                                    // creation/selection UI properly.
+                                    // Shows only the first primary muscle
+                                    // in this compact row; the full set is
+                                    // visible in ExerciseCreationView/
+                                    // ExerciseHistoryView.
                                     Text(exercise.primaryMuscles.first.map { displayName(for: $0) } ?? "—")
                                         .font(.caption)
                                         .foregroundStyle(.secondary)
@@ -85,24 +91,12 @@ struct ExercisePickerView: View {
                     Button("Cancel") { dismiss() }
                 }
             }
-        }
-    }
-
-    @ViewBuilder
-    private var createExerciseRow: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Button {
-                createAndAssign()
-            } label: {
-                Text("Create \u{201C}\(trimmedSearchText)\u{201D}…")
-            }
-
-            Picker("Primary muscle", selection: $newExerciseMuscle) {
-                ForEach(MuscleGroup.allCases, id: \.self) { muscle in
-                    Text(displayName(for: muscle)).tag(muscle)
+            .sheet(isPresented: $isPresentingCreation) {
+                ExerciseCreationView(initialName: trimmedSearchText) { exercise in
+                    modelContext.insert(exercise)
+                    select(exercise)
                 }
             }
-            .pickerStyle(.menu)
         }
     }
 
@@ -110,44 +104,6 @@ struct ExercisePickerView: View {
         workoutSet.exercise = exercise
         try? modelContext.save()
         dismiss()
-    }
-
-    // specs/01-system-spec.md §1.1: Exercise.name is stored lowercase.
-    // Task 6.1: wraps the single quick-picked muscle in a list to match
-    // the new `primaryMuscles` field — this whole creation flow (category,
-    // multi-muscle chips, AI classification) is properly rebuilt in
-    // Task 6.2; this is the minimal change needed to compile against the
-    // new Exercise schema.
-    private func createAndAssign() {
-        let exercise = Exercise(
-            name: trimmedSearchText.lowercased(),
-            primaryMuscles: [newExerciseMuscle],
-            isCustom: true
-        )
-        modelContext.insert(exercise)
-        select(exercise)
-        classifyMuscleGroups(for: exercise)
-    }
-
-    // specs/modules/03-ai-and-muscle-map.md §1: fired only on Exercise
-    // creation (never for selecting an existing one), asynchronously, in
-    // the background — the sheet has already dismissed by the time this
-    // resolves. If the service has no key, is offline, or fails to parse
-    // a valid response, `classify` returns nil and the manually-picked
-    // `newExerciseMuscle` this exercise was created with is left as-is.
-    private func classifyMuscleGroups(for exercise: Exercise) {
-        guard let muscleClassifierService else { return }
-        Task {
-            guard let result = await muscleClassifierService.classify(exerciseName: exercise.name) else {
-                return
-            }
-            // Task 6.1: wraps the still-singular MuscleClassifierService
-            // result in a list; Task 6.2 replaces this service (and its
-            // result shape) with GeminiExerciseClassifier's own array output.
-            exercise.primaryMuscles = [result.primaryMuscleGroup]
-            exercise.secondaryMuscles = result.secondaryMuscleGroups
-            try? modelContext.save()
-        }
     }
 
     private func displayName(for muscle: MuscleGroup) -> String {

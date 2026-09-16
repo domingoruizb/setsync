@@ -160,10 +160,10 @@ private struct HealthKitServiceKey: EnvironmentKey {
     static let defaultValue: HealthKitService? = nil
 }
 
-// MARK: - MuscleClassifierService environment injection
+// MARK: - GeminiExerciseClassifier environment injection
 
-private struct MuscleClassifierServiceKey: EnvironmentKey {
-    static let defaultValue: MuscleClassifierService? = nil
+private struct GeminiExerciseClassifierKey: EnvironmentKey {
+    static let defaultValue: GeminiExerciseClassifier? = nil
 }
 
 extension EnvironmentValues {
@@ -172,8 +172,8 @@ extension EnvironmentValues {
         set { self[HealthKitServiceKey.self] = newValue }
     }
 
-    var muscleClassifierService: MuscleClassifierService? {
-        get { self[MuscleClassifierServiceKey.self] }
-        set { self[MuscleClassifierServiceKey.self] = newValue }
+    var geminiExerciseClassifier: GeminiExerciseClassifier? {
+        get { self[GeminiExerciseClassifierKey.self] }
+        set { self[GeminiExerciseClassifierKey.self] = newValue }
     }
 }
