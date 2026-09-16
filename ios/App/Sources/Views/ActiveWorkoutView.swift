@@ -37,6 +37,10 @@ struct ActiveWorkoutView: View {
 
     var body: some View {
         List {
+            Section {
+                sessionSummaryHeader
+            }
+
             if orderedSets.isEmpty {
                 Text("Esperando series de tu reloj…")
                     .foregroundStyle(.secondary)
@@ -64,6 +68,37 @@ struct ActiveWorkoutView: View {
             SetEditView(set: set)
         }
     }
+
+    // Session summary card at the top of the list: start time ("Inicio:
+    // HH:mm", a fixed 24h format regardless of the device's locale/12-24h
+    // setting, per this task's explicit format) and a live elapsed-time
+    // counter. `Text(_:style: .timer)` is SwiftUI's native live-updating
+    // timer text — it recomputes and redraws itself every second on its
+    // own, without a manual `Timer`/`@State` tick driving the whole view's
+    // body, and already formats as MM:SS or H:MM:SS once past an hour.
+    private var sessionSummaryHeader: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("En curso")
+                    .font(.headline)
+                Text("Inicio: \(Self.startTimeFormatter.string(from: session.startDate))")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+            Text(session.startDate, style: .timer)
+                .font(.title2)
+                .monospacedDigit()
+                .foregroundStyle(.primary)
+        }
+        .padding(.vertical, 4)
+    }
+
+    private static let startTimeFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "HH:mm"
+        return formatter
+    }()
 
     // offsets index into `orderedSets`, the exact same array/order the
     // ForEach above was built from, so they map 1:1 onto its elements.

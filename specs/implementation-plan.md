@@ -135,3 +135,11 @@ First Garmin-side change since the Post-Launch Field Test Fixes — everything b
 - **[x] MM:SS / HH:MM:SS formatting.** New `formatElapsedTime(totalSeconds)` delegates to the existing `formatMmSs` under an hour, and switches to `H:MM:SS` at/past 3600 seconds — a separate function from `formatMmSs` itself, which stays MM:SS-only for the rest timer and the `ACTIVE_SET` set-duration readout (neither of which should ever need the hour digit).
 - **[x] Per-second refresh — no new timer needed.** `onTimerTick`'s existing `WatchUi.requestUpdate()` already fires every second while the state is `RESTING` (it was added for the rest timer itself); since `drawResting` now recomputes `Total:` from `_sessionStartMs` on every `onUpdate`, it refreshes for free on the same tick, satisfying "el cronómetro se refresque cada segundo" without a second `Timer.Timer`.
 - **Compiled locally:** `monkeyc -d fr165 -f monkey.jungle -o bin/SetSync.prg -y developer_key -r` → `BUILD SUCCESSFUL`.
+
+---
+
+## Post-Launch Feature: Cabecera de Hora de Inicio/Tiempo Transcurrido en `ActiveWorkoutView` (iOS)
+
+- **[x] New session-summary card** at the top of `ActiveWorkoutView`'s list: "En curso" plus "Inicio: HH:mm" (a fixed `DateFormatter` with `dateFormat = "HH:mm"`, deliberately not a locale-dependent `.formatted(date:time:)` style, so it's always 24h regardless of the device's locale/12-24h setting, per this task's explicit format) on the left, and a live elapsed-time counter on the right.
+- **[x] `Text(session.startDate, style: .timer)`** for the live counter, exactly as this task suggested — SwiftUI's native live-updating timer text recomputes and redraws itself every second on its own (no manual `Timer`/`@State` tick needed, unlike the Garmin-side rest timer in the entry just above, which has no equivalent native primitive in Monkey C), and already formats as MM:SS or H:MM:SS once the session passes an hour, matching both this task's format requirement and the Garmin RESTING screen's own elapsed-time formatting from the entry above.
+- **Verification:** same no-local-Swift-toolchain caveat as every iOS task since 3.1.
