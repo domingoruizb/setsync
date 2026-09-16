@@ -94,9 +94,20 @@ struct TodayView: View {
 
     // MARK: - Week pager
 
+    // `TabView(.page)` lays out its pages left-to-right in the order the
+    // ForEach declares them, regardless of the numeric value of each
+    // page's `.tag()` — so `weekOffset` itself keeps its original meaning
+    // (0 = current week, increasing = further into the past) everywhere
+    // else in this file, and only the *iteration order* here is reversed:
+    // the oldest week (highest offset) is declared first, landing
+    // leftmost, and the current week (offset 0) is declared last, landing
+    // rightmost — the default selection. That makes swiping right (past
+    // pages are to the left of the current one) reveal earlier weeks, and
+    // swiping left from a past week move back toward the present, per
+    // this task's explicit direction requirement.
     private var weekPager: some View {
         TabView(selection: $weekOffset) {
-            ForEach(0...Self.maxWeeksBack, id: \.self) { offset in
+            ForEach((0...Self.maxWeeksBack).reversed(), id: \.self) { offset in
                 weekRow(forOffset: offset)
                     .tag(offset)
             }
