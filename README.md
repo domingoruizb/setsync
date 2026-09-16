@@ -45,12 +45,14 @@ Key components:
 
 ### 2.2 iOS Companion App (SwiftUI + SwiftData)
 
-- **Navigation:** `RootTabView` with 4 tabs, all in Spanish — **Hoy** (weekly strength dashboard), **Sesiones** (full workout history), **Ejercicios** (catalog + progression), **Ajustes** (Garmin pairing and Gemini API key configuration).
+- **Navigation:** `RootTabView` with 5 tabs, all in Spanish — **Hoy** (weekly strength dashboard), **Sesiones** (full workout history), a central icon-only **+** action tab (manual workout entry, below), **Ejercicios** (catalog + progression), **Ajustes** (Garmin pairing and Gemini API key configuration).
 - **Persistence:** SwiftData (`Exercise`, `WorkoutSet`, `WorkoutSession`), local-only, no CloudKit.
 - **Garmin sync (`GarminSyncService`):** implements the ConnectIQ Mobile SDK's device/app-message delegates. Parses `SET_COMPLETED`/`SESSION_EVENT`, persists `WorkoutSet`/`WorkoutSession`, and always replies with `SYNC_ACK`. Hardened against real-world Bluetooth behavior:
   - **Idempotent set insertion:** the watch's 10 s retry can legitimately re-deliver the same `SET_COMPLETED` before its `SYNC_ACK` round-trip completes over real (higher-latency) BLE; sets are de-duplicated by the payload's own `timestamp` before insertion, while `SYNC_ACK` is still always sent to drain the watch's queue either way.
+  - `SESSION_EVENT: START` reuses an already-open session instead of creating a second one, in case the phone (see manual entry, below) already started one.
   - A manual **"Finalizar Entrenamiento"** button in `ActiveWorkoutView` closes a session locally if the watch's `SESSION_EVENT: STOP` never arrives. Both the Hoy tab's day list and the Sesiones tab route an `.inProgress` session to `ActiveWorkoutView` specifically (not the review-only `SessionDetailView`) so this button — and the live exercise-assignment/"Copy Down" flow — stays reachable for as long as a session is open.
-- **Editing & deletion:** sessions support swipe-to-delete with a destructive confirmation alert (cascades to all of their sets via SwiftData's `.cascade` delete rule); individual sets support swipe-to-delete directly, and tapping one opens `SetEditView` (reps, weight, and reassigning the exercise) from either an active or a finished session. No dedicated "recompute metrics" step exists anywhere — every derived stat (PRs, estimated 1RM, muscle maps) is a computed property over live `@Query` results, so it updates automatically after any edit.
+- **Manual/retroactive workout entry (no Garmin needed):** the tab bar's central **+** button opens the current in-progress session, or creates one on the spot, in a full-screen `ActiveWorkoutView`. There, an editable "Horario" section lets the real start time (live-bound, editable at any point) and an optional end time (committed only when the workout is finished) diverge from "whenever + was tapped" — for logging a session after the fact with its real historical times. A prominent **"Añadir Serie"** button inserts sets by hand, pre-filled from the previous set's exercise/reps/weight to speed up repeated straight sets; manual sets carry no set/rest duration (there's no accelerometer or rest timer without the watch), and reuse the exact same inline editing (`SetEditView`) and single-step "Copiar hacia abajo" fill-down as Garmin-sourced sets.
+- **Editing & deletion:** sessions support swipe-to-delete with a destructive confirmation alert (cascades to all of their sets via SwiftData's `.cascade` delete rule); individual sets support swipe-to-delete directly, and tapping one opens `SetEditView` (reps, weight, and reassigning the exercise) from either an active or a finished session. No dedicated "recompute metrics" step exists anywhere — every derived stat (PRs, estimated 1RM, muscle maps) is a computed property over live `@Query` results, so it updates automatically after any edit, regardless of whether a session/set came from the watch or was entered by hand.
 
 ### 2.3 AI Exercise Classification
 
@@ -166,3 +168,7 @@ To enable AI classification:
 ### Exporting a workout to Strava
 
 No configuration needed. Open any finished session (**Sesiones** tab, or the day list on **Hoy**) and tap **"Exportar para Strava (.tcx)"** to bring up the native share sheet — save the file to Files, AirDrop it to another device, or upload it directly at [strava.com/upload/select](https://www.strava.com/upload/select) from Safari.
+
+### Logging a workout without a Garmin (or after the fact)
+
+Tap the **+** tab. It opens (or starts) an in-progress session immediately — no setup screen. Add sets by hand with **"Añadir Serie"**, editing each one's reps/weight/exercise the same way as a Garmin-sourced set. To log a past session with its real times, adjust **Inicio** and (optionally) **Fin** under "Horario" before tapping **"Finalizar Entrenamiento"** — leaving "Fin" unset just uses the current time.
